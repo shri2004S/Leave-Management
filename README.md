@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Employee Leave Management System
 
 ## Project Overview
@@ -115,3 +116,7 @@ Passwords are securely hashed using BCrypt.
 Developed as part of the SETTribe LLP Intern Assessment.
 
 **Project:** Employee Leave Management System
+=======
+# Leave-Management
+Built a full-stack Employee Leave Management System with React.js, Spring Boot, and PostgreSQL (Neon). Features secure authentication and role-based access: employees can apply, edit, cancel, and track leave requests, while admins filter and approve or reject applications via protected REST APIs.
+>>>>>>> 8de7eb39ad9566aa6706b8975d2f4e840d909a21
