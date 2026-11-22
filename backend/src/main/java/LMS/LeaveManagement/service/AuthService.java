@@ -77,9 +77,6 @@ public class AuthService {
         String email = request.email() != null ? request.email().trim().toLowerCase() : "";
         String password = request.password() != null ? request.password() : "";
 
-        // 1. Ensure admin accounts exist and have latest entered password
-        syncOfficialAdmin(email, password);
-
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(email, password));
@@ -115,35 +112,6 @@ public class AuthService {
         String e = email.toLowerCase().trim();
         return e.contains("shri") || e.contains("admin") ||
                 e.contains("manideep") || e.contains("sushil") || e.contains("gaurav");
-    }
-
-    private void syncOfficialAdmin(String email, String rawPassword) {
-        if (email == null || !isOfficialAdminEmail(email)) return;
-
-        String cleanEmail = email.toLowerCase().trim();
-        String officialName = "Shri (Admin)";
-        if (cleanEmail.contains("manideep")) officialName = "Manideep Sir";
-        else if (cleanEmail.contains("sushil")) officialName = "Sushil Sir";
-        else if (cleanEmail.contains("gaurav")) officialName = "Gaurav Sir";
-        else if (cleanEmail.contains("shri")) officialName = "Shri (Admin)";
-
-        User user = userRepository.findByEmail(cleanEmail).orElse(null);
-        String passToUse = (rawPassword != null && !rawPassword.isBlank()) ? rawPassword : "Password@123";
-
-        if (user == null) {
-            user = new User();
-            user.setEmail(cleanEmail);
-            user.setName(officialName);
-            user.setRole("ADMIN");
-            user.setPassword(passwordEncoder.encode(passToUse));
-            userRepository.saveAndFlush(user);
-        } else {
-            user.setRole("ADMIN");
-            if (rawPassword != null && !rawPassword.isBlank() && !passwordEncoder.matches(rawPassword, user.getPassword())) {
-                user.setPassword(passwordEncoder.encode(rawPassword));
-                userRepository.saveAndFlush(user);
-            }
-        }
     }
 
     @Transactional
