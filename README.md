@@ -1,121 +1,101 @@
-# Employee Leave Management System
+# Employee Leave Management System (LeaveHub)
 
-## Project Overview
-A web-based Employee Leave Management System developed using React.js, Spring Boot, MySQL, and JWT authentication.
+Built a full-stack Employee Leave Management System with React.js, Spring Boot, and PostgreSQL (Neon Serverless). Features secure authentication and role-based access: employees can apply, edit, cancel, and track leave requests, while admins filter and approve or reject applications via protected REST APIs.
 
-This application helps employees apply for leave, manage leave requests, and track their leave status. Administrators can view employee requests and approve or reject them.
+---
 
 ## Technologies Used
 
 ### Frontend
-- React.js
-- JavaScript
-- HTML and CSS
-- Axios
-- Vite
+- **Framework:** React.js 19
+- **Bundler & Dev Server:** Vite 8
+- **HTTP Client:** Axios (centralized configuration with auto JWT injection)
+- **Styling:** CSS3 (modern responsive design system)
+- **Linter & Test:** Oxlint & Node.js native test runner
 
 ### Backend
-- Java 21
-- Spring Boot
-- Spring Security
-- Spring Data JPA
-- REST APIs
-- JWT Authentication
-- Maven
+- **Framework:** Spring Boot 3.4.2
+- **Language:** Java 17 / 21
+- **Security:** Spring Security 6 (Stateless JWT, HttpOnly Cookies, BCrypt)
+- **ORM & Data Access:** Spring Data JPA / Hibernate
+- **Database Driver:** PostgreSQL JDBC Driver
 
 ### Database
-- MySQL
+- **Database:** PostgreSQL (Neon Cloud Serverless PostgreSQL with TLS)
+- **Connection Pool:** HikariCP (optimized bounded pool with keep-alive ping)
 
-### Tools
-- Visual Studio Code
-- Eclipse IDE
-- Postman
-- Git and GitHub
-- XAMPP
+---
 
-## Features
+## Key Features
 
 ### Employee Features
-- User registration and login
-- JWT-based authentication
-- Apply for leave
-- View personal leave requests
-- Edit pending leave requests
-- Cancel pending leave requests
-- Track leave request status
+- **User Authentication:** Registration with input validation (alphabetical-only name enforcement), login, and session persistence.
+- **Interactive Leave Application:** Apply for Casual, Sick, Earned, or Other leaves with live working days calculation (excluding Saturdays and Sundays).
+- **Assigned Approver Selection:** Select reviewing administrators (**Manideep Sir**, **Sushil Sir**, **Gaurav Sir**).
+- **History & Tracking:** Tabular view of all submissions with filter by status and category.
+- **Edit & Cancel:** Ability to modify or cancel pending applications prior to review.
+- **User Profile Modal:** Dedicated modal displaying user details, role, and capabilities.
 
 ### Admin Features
-- Admin login
-- View employee leave requests
-- Approve or reject leave requests
-- Manage leave applications
+- **Admin Command Center:** Real-time metrics counters for Total, Pending, Approved, and Rejected requests.
+- **Organization-Wide Oversight:** Filter by Status, Approver, and Leave Category with multi-field search.
+- **Approval Actions:** Modal confirmation to approve or reject leave applications.
+- **Dual View Support:** Administrators can toggle between Admin View and Personal Employee View.
+
+---
 
 ## Project Structure
 
 ```text
 Employee-Leave-Management-System/
-│
-├── backend/
-│   └── Spring Boot Application
-│
-├── frontend/
-│   └── React Application
-│
-├── database/
-│   └── SQL Files
-│
-├── .gitignore
-└── README.md
+├── backend/                  # Spring Boot application
+│   ├── src/main/java/        # Controllers, Services, Repositories, Entities, Config
+│   ├── src/main/resources/   # application.properties
+│   └── pom.xml               # Maven configuration
+├── frontend/                 # React 19 application
+│   ├── src/components/       # UI Components (ApplyLeave, MyLeaveRequests, AdminLeaveManagement, UserProfileModal)
+│   ├── src/utils/            # Utilities (dateUtils, working days calculation)
+│   └── package.json          # Vite & dependencies
+├── database/                 # SQL schemas (PostgreSQL migration & sample data)
+├── .env                      # Environment variables
+└── docker-compose.yml        # Docker configuration
 ```
 
-## Database Configuration
-
-1. Start MySQL using XAMPP.
-2. Create a database named `settribe_leave_db`.
-3. Configure your database username and password in `application.properties`.
-4. Configure the JWT secret using an environment variable.
+---
 
 ## How to Run the Project
 
-### 1. Start Backend
+### Prerequisites
+- Node.js 18+ & npm
+- Java 17+ & Maven
+- Active Internet connection (for Neon PostgreSQL) or local PostgreSQL/MySQL
 
-Open the backend project in Eclipse and run:
+### 1. Backend Setup
+1. Configure database credentials in `.env` or `backend/src/main/resources/application.properties`.
+2. In the `backend` directory, run:
+   ```bash
+   mvn clean spring-boot:run
+   ```
+3. Backend starts on `http://localhost:8080`.
 
-`LeaveManagementApplication.java`
+### 2. Frontend Setup
+1. In the `frontend` directory, install dependencies and run:
+   ```bash
+   npm install
+   npm run dev
+   ```
+2. Frontend runs on `http://localhost:5173`.
 
-Backend URL:
-
-`http://localhost:8080`
-
-### 2. Start Frontend
-
-Open the frontend folder in VS Code terminal and execute:
-
-```bash
-npm install
-npm run dev
-```
-
-Frontend URL:
-
-`http://localhost:5173`
-
-### 3. Test APIs
-
-Use Postman to test the Spring Boot REST APIs.
-
-## Authentication
-
-The application uses JWT authentication and Spring Security to protect APIs and control access based on user roles.
-
-Passwords are securely hashed using BCrypt.
-
-## Developer
-
-Developed as part of the SETTribe LLP Intern Assessment.
-
-**Project:** Employee Leave Management System
-=======
-# Leave-Management
-Built a full-stack Employee Leave Management System with React.js, Spring Boot, and PostgreSQL (Neon). Features secure authentication and role-based access: employees can apply, edit, cancel, and track leave requests, while admins filter and approve or reject applications via protected REST APIs.
-
+### 3. Run Automated Tests
+- **Frontend Tests:**
+  ```bash
+  cd frontend
+  npm test
+  npm run lint
+  npm run build
+  ```
+- **Backend Tests:**
+  ```bash
+  cd backend
+  mvn test
+  ```

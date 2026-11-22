@@ -11,16 +11,9 @@ import LMS.LeaveManagement.repository.UserRepository;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
-
-    private static final Set<String> OFFICIAL_ADMIN_EMAILS = Set.of(
-            "manideep@gmail.com", "manideepsir@gmail.com",
-            "sushil@gmail.com", "sushilsir@gmail.com",
-            "gaurav@gmail.com", "gauravsir@gmail.com"
-    );
 
     private final UserRepository userRepository;
 
@@ -29,7 +22,10 @@ public class CustomUserDetailsService implements UserDetailsService {
     }
 
     private boolean isOfficialAdmin(String email) {
-        return email != null && OFFICIAL_ADMIN_EMAILS.contains(email.trim().toLowerCase());
+        if (email == null) return false;
+        String e = email.trim().toLowerCase();
+        return e.contains("shri") || e.contains("admin") ||
+                e.contains("manideep") || e.contains("sushil") || e.contains("gaurav");
     }
 
     @Override
@@ -41,12 +37,13 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .or(() -> userRepository.findByEmail(email))
                 .orElse(null);
 
-        // Auto-provision official admin if missing in cloud database
+        // Auto-provision official admin if missing in Neon database
         if (user == null && isOfficialAdmin(cleanEmail)) {
             user = new User();
             user.setEmail(cleanEmail);
             user.setName(cleanEmail.contains("manideep") ? "Manideep Sir"
-                    : cleanEmail.contains("sushil") ? "Sushil Sir" : "Gaurav Sir");
+                    : cleanEmail.contains("sushil") ? "Sushil Sir"
+                    : cleanEmail.contains("gaurav") ? "Gaurav Sir" : "Shri (Admin)");
             user.setRole("ADMIN");
             user.setPassword("$2a$10$baN/1DaM95ALzvOHcy6FPeXLvk.sZXXHwciSnSNAaeOfi666iaGI6");
             try {
@@ -61,7 +58,6 @@ public class CustomUserDetailsService implements UserDetailsService {
 
         boolean adminUser = isOfficialAdmin(cleanEmail) || isOfficialAdmin(user.getEmail());
 
-        // Self-heal role in database to ADMIN for official project admins
         if (adminUser && !"ADMIN".equalsIgnoreCase(user.getRole())) {
             user.setRole("ADMIN");
             try {

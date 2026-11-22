@@ -12,7 +12,8 @@ services:
     autoDeploy: true
     healthCheckPath: /api/health
     envVars:
-      # Database connection (Provide your cloud MySQL credentials from Aiven / TiDB / PlanetScale)
+      # Neon PostgreSQL Database Credentials (from https://console.neon.tech)
+      # Direct JDBC Connection: jdbc:postgresql://<ENDPOINT>.neon.tech/neondb?sslmode=require
       - key: SPRING_DATASOURCE_URL
         sync: false
       - key: SPRING_DATASOURCE_USERNAME

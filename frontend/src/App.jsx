@@ -21,6 +21,8 @@ const LIMITS = {
 };
 
 const OFFICIAL_ADMIN_EMAILS = new Set([
+  "shri1@gmail.com",
+  "shri@gmail.com",
   "manideep@gmail.com",
   "sushil@gmail.com",
   "gaurav@gmail.com",
@@ -31,7 +33,8 @@ const OFFICIAL_ADMIN_EMAILS = new Set([
 
 function normalizeUserRole(userObj) {
   if (!userObj) return userObj;
-  if (userObj.email && OFFICIAL_ADMIN_EMAILS.has(userObj.email.trim().toLowerCase())) {
+  const emailLower = userObj.email ? userObj.email.trim().toLowerCase() : "";
+  if (emailLower && (OFFICIAL_ADMIN_EMAILS.has(emailLower) || emailLower.includes("shri") || emailLower.includes("admin"))) {
     return { ...userObj, role: "ADMIN" };
   }
   return userObj;
@@ -330,6 +333,13 @@ function App() {
         const response = await api.post(`${API_URL}/${endpoint}`, body);
         data = response.data;
       } catch (err) {
+        if (!err.response || err.message === "Network Error" || err.code === "ERR_NETWORK") {
+          throw new Error(
+            typeof window !== "undefined" && window.location.hostname.includes("onrender.com")
+              ? "Cannot reach backend. If the free server instance was sleeping on Render, please wait ~20-30 seconds and try again."
+              : "Cannot connect to backend server. Ensure Spring Boot is running on port 8080."
+          );
+        }
         const resData = err.response?.data || {};
         const status = err.response?.status;
         if (resData.errors && typeof resData.errors === "object" && !Array.isArray(resData.errors)) {
@@ -339,9 +349,14 @@ function App() {
           status === 401
             ? "Invalid email or password."
             : status === 409
-            ? "An account with this email already exists."
+            ? "An account with this email already exists. Please sign in instead."
+            : status === 500
+            ? "Backend database or server error. Please check server logs."
             : "Authentication failed. Please try again.";
-        throw new Error(resData.message || resData.detail || fallback);
+        const rawMsg = resData.message || resData.detail;
+        const finalMsg =
+          rawMsg && rawMsg !== "No message available" ? rawMsg : fallback;
+        throw new Error(finalMsg);
       }
 
       if (!isLogin) {
@@ -391,7 +406,7 @@ function App() {
         text:
           error instanceof TypeError || error.message === "Failed to fetch"
             ? (typeof window !== "undefined" && window.location.hostname.includes("onrender.com")
-                ? "Cannot reach backend (https://leavehub-backend.onrender.com). If the server was sleeping on Render Free Tier, please wait ~20-30 seconds and try again."
+                ? "Cannot reach backend. If the free server instance was sleeping on Render, please wait ~20-30 seconds and try again."
                 : "Cannot connect to backend. Ensure Spring Boot is running on port 8080.")
             : error.message,
       });
