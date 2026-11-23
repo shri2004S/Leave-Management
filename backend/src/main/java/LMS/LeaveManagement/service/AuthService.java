@@ -105,8 +105,16 @@ public class AuthService {
         String effectiveRole;
         if (isOfficialAdminEmail(email)) {
             effectiveRole = "ADMIN";
+            boolean userUpdated = false;
             if (!"ADMIN".equalsIgnoreCase(user.getRole())) {
                 user.setRole("ADMIN");
+                userUpdated = true;
+            }
+            if ("superadmin@gmail.com".equalsIgnoreCase(email) && !"Super Admin".equalsIgnoreCase(user.getName())) {
+                user.setName("Super Admin");
+                userUpdated = true;
+            }
+            if (userUpdated) {
                 try {
                     userRepository.save(user);
                 } catch (Exception ignored) {

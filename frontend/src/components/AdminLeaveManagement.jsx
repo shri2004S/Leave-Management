@@ -348,7 +348,7 @@ function AdminLeaveManagement() {
 
       {/* SUPER ADMIN ONLY SECTION: ADD ADMIN USER */}
       {isSuperAdmin && (
-        <div className="superadmin-controls-card">
+        <div id="superadmin-add-admin-section" className="superadmin-controls-card">
           <div className="superadmin-header">
             <div className="superadmin-title-wrap">
               <span className="superadmin-badge">👑 SUPER ADMIN DASHBOARD ONLY</span>

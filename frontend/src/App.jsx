@@ -36,11 +36,15 @@ const OFFICIAL_ADMIN_EMAILS = new Set([
 function normalizeUserRole(userObj) {
   if (!userObj) return userObj;
   const emailLower = userObj.email ? userObj.email.trim().toLowerCase() : "";
+  let name = userObj.name;
+  if (emailLower === "superadmin@gmail.com") {
+    name = "Super Admin";
+  }
   if (emailLower && OFFICIAL_ADMIN_EMAILS.has(emailLower)) {
-    return { ...userObj, role: "ADMIN" };
+    return { ...userObj, name: name || "Super Admin", role: "ADMIN" };
   }
   const role = userObj.role ? userObj.role.trim().toUpperCase() : "EMPLOYEE";
-  return { ...userObj, role };
+  return { ...userObj, name: name || userObj.name, role };
 }
 
 function validateName(value) {
@@ -157,7 +161,10 @@ function App() {
   const [message, setMessage] = useState({ type: "", text: "" });
   const [loading, setLoading] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [activeTab, setActiveTab] = useState("EMPLOYEE"); // "EMPLOYEE" or "ADMIN"
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = loadSavedUser();
+    return saved?.role === "ADMIN" ? "ADMIN" : "EMPLOYEE";
+  });
   const [user, setUser] = useState(loadSavedUser);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -557,6 +564,28 @@ function App() {
                     <span>Admin Portal</span>
                     <span className="nav-badge-pill">Admin</span>
                   </button>
+
+                  {user?.email?.trim().toLowerCase() === "superadmin@gmail.com" && (
+                    <button
+                      className="sidebar-nav-item"
+                      onClick={() => {
+                        setActiveTab("ADMIN");
+                        setIsSidebarOpen(false);
+                        setTimeout(() => {
+                          document.getElementById("superadmin-add-admin-section")?.scrollIntoView({ behavior: "smooth" });
+                        }, 100);
+                      }}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="8.5" cy="7" r="4"></circle>
+                        <line x1="20" y1="8" x2="20" y2="14"></line>
+                        <line x1="23" y1="11" x2="17" y2="11"></line>
+                      </svg>
+                      <span>Add Admin User</span>
+                      <span className="nav-badge-pill" style={{ background: "#eef2ff", color: "#4338ca", border: "1px solid #c7d2fe" }}>Super</span>
+                    </button>
+                  )}
 
                   <button
                     className={`sidebar-nav-item ${activeTab === "EMPLOYEE" ? "active" : ""}`}

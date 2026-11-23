@@ -84,11 +84,16 @@ public class DataInitializer implements CommandLineRunner {
         userRepository.findByEmail(email).ifPresentOrElse(
                 user -> {
                     boolean changed = false;
+                    if (name != null && !name.equalsIgnoreCase(user.getName())) {
+                        user.setName(name);
+                        changed = true;
+                    }
                     if (!"ADMIN".equalsIgnoreCase(user.getRole())) {
                         user.setRole("ADMIN");
                         changed = true;
                     }
-                    if (!passwordEncoder.matches(password, user.getPassword()) && !passwordEncoder.matches("Shri1234@", user.getPassword())) {
+                    if (!passwordEncoder.matches(password, user.getPassword())
+                            && !passwordEncoder.matches("Shri1234@", user.getPassword())) {
                         user.setPassword(passwordEncoder.encode(password));
                         changed = true;
                         log.info("Synchronized official admin credentials for: {}", email);
@@ -105,8 +110,7 @@ public class DataInitializer implements CommandLineRunner {
                     admin.setRole("ADMIN");
                     userRepository.save(admin);
                     log.info("Created Admin account: {}", email);
-                }
-        );
+                });
     }
 
     private User createOrGetEmployee(String name, String email, String password) {
