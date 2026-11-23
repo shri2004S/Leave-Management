@@ -46,8 +46,7 @@ public class AuthService {
             "admin@settribe.com",
             "manideep@gmail.com",
             "sushil@gmail.com",
-            "gaurav@gmail.com"
-    );
+            "gaurav@gmail.com");
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -68,12 +67,11 @@ public class AuthService {
 
         userRepository.saveAndFlush(user);
 
-        UserDetails details =
-                org.springframework.security.core.userdetails.User
-                        .withUsername(user.getEmail())
-                        .password(user.getPassword())
-                        .roles("EMPLOYEE")
-                        .build();
+        UserDetails details = org.springframework.security.core.userdetails.User
+                .withUsername(user.getEmail())
+                .password(user.getPassword())
+                .roles("EMPLOYEE")
+                .build();
 
         String token = jwtService.generateToken(details);
 
@@ -126,12 +124,11 @@ public class AuthService {
                     : "EMPLOYEE";
         }
 
-        UserDetails details =
-                org.springframework.security.core.userdetails.User
-                        .withUsername(user.getEmail())
-                        .password(user.getPassword())
-                        .roles(effectiveRole)
-                        .build();
+        UserDetails details = org.springframework.security.core.userdetails.User
+                .withUsername(user.getEmail())
+                .password(user.getPassword())
+                .roles(effectiveRole)
+                .build();
 
         String token = jwtService.generateToken(details);
 
@@ -141,7 +138,8 @@ public class AuthService {
     }
 
     private boolean isOfficialAdminEmail(String email) {
-        if (email == null) return false;
+        if (email == null)
+            return false;
         return OFFICIAL_ADMIN_EMAILS.contains(email.toLowerCase().trim());
     }
 
@@ -177,11 +175,14 @@ public class AuthService {
                 ? user.getRole().trim().toUpperCase()
                 : (isOfficialAdminEmail(user.getEmail()) ? "ADMIN" : "EMPLOYEE");
 
+        String displayName = "superadmin@gmail.com".equalsIgnoreCase(user.getEmail())
+                ? "Super Admin"
+                : (user.getName() != null ? user.getName() : "User");
+
         return Map.of(
                 "userId", user.getId(),
-                "name", user.getName(),
+                "name", displayName,
                 "email", user.getEmail(),
-                "role", role
-        );
+                "role", role);
     }
 }

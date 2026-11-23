@@ -80,6 +80,31 @@ public class SuperAdminControllerTest {
     }
 
     @Test
+    @DisplayName("Should allow Super Admin to create a new Administrator using ONLY email and password")
+    void testCreateAdminWithOnlyEmailAndPassword() {
+        when(authentication.getName()).thenReturn("superadmin@gmail.com");
+        when(userRepository.findByEmail("rahul.sharma@settribe.com")).thenReturn(Optional.empty());
+        when(passwordEncoder.encode("Password@123")).thenReturn("encodedPassword");
+
+        User savedUser = new User();
+        savedUser.setId(25L);
+        savedUser.setName("Rahul Sharma (Admin)");
+        savedUser.setEmail("rahul.sharma@settribe.com");
+        savedUser.setRole("ADMIN");
+
+        when(userRepository.save(any(User.class))).thenReturn(savedUser);
+
+        CreateAdminRequest req = new CreateAdminRequest("rahul.sharma@settribe.com", "Password@123");
+        ResponseEntity<Map<String, Object>> response = controller.createAdmin(req, authentication);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().get("role")).isEqualTo("ADMIN");
+        assertThat(response.getBody().get("email")).isEqualTo("rahul.sharma@settribe.com");
+        assertThat(response.getBody().get("name")).isEqualTo("Rahul Sharma (Admin)");
+    }
+
+    @Test
     @DisplayName("Should reject admin creation if name contains digits")
     void testCreateAdminDigitsInName() {
         when(authentication.getName()).thenReturn("superadmin@gmail.com");

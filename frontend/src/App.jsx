@@ -126,7 +126,7 @@ function passwordStrength(value) {
 }
 // ======================================================
 
-import { AUTH_API_URL as API_URL, api } from "./apiConfig";
+import { AUTH_API_URL as API_URL, ADMIN_USERS_API_URL, api } from "./apiConfig";
 const STRENGTH_LABELS = ["Too weak", "Weak", "Fair", "Good", "Strong"];
 
 const EMPTY_FORM = { name: "", email: "", password: "", confirmPassword: "" };
@@ -134,7 +134,9 @@ const EMPTY_FORM = { name: "", email: "", password: "", confirmPassword: "" };
 function loadSavedUser() {
   try {
     const saved = localStorage.getItem("leaveUser");
-    return saved ? JSON.parse(saved) : null;
+    if (!saved) return null;
+    const parsed = JSON.parse(saved);
+    return normalizeUserRole(parsed);
   } catch {
     localStorage.removeItem("leaveUser");
     localStorage.removeItem("leaveToken");
@@ -168,6 +170,54 @@ function App() {
   const [user, setUser] = useState(loadSavedUser);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showAddAdminModal, setShowAddAdminModal] = useState(false);
+  const [adminModalEmail, setAdminModalEmail] = useState("");
+  const [adminModalPassword, setAdminModalPassword] = useState("");
+  const [adminModalLoading, setAdminModalLoading] = useState(false);
+  const [adminModalError, setAdminModalError] = useState("");
+  const [adminModalSuccess, setAdminModalSuccess] = useState("");
+
+  async function handleQuickAddAdmin(e) {
+    e.preventDefault();
+    setAdminModalError("");
+    setAdminModalSuccess("");
+
+    const email = adminModalEmail.trim().toLowerCase();
+    const password = adminModalPassword;
+
+    if (!email || !EMAIL_REGEX.test(email)) {
+      setAdminModalError("Please enter a valid email address.");
+      return;
+    }
+    if (!password || password.length < 6) {
+      setAdminModalError("Password must be at least 6 characters.");
+      return;
+    }
+    if (!/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password)) {
+      setAdminModalError("Password must contain uppercase, lowercase, and a number.");
+      return;
+    }
+
+    setAdminModalLoading(true);
+    try {
+      const res = await api.post(`${ADMIN_USERS_API_URL}/create-admin`, {
+        email,
+        password,
+      });
+      setAdminModalSuccess(res.data?.message || `Admin account for ${email} created successfully!`);
+      setAdminModalEmail("");
+      setAdminModalPassword("");
+      setTimeout(() => {
+        setShowAddAdminModal(false);
+        setAdminModalSuccess("");
+        setActiveTab("ADMIN");
+      }, 1500);
+    } catch (err) {
+      setAdminModalError(err.response?.data?.message || err.message || "Failed to create admin.");
+    } finally {
+      setAdminModalLoading(false);
+    }
+  }
 
   useEffect(() => {
     async function verifySession() {
@@ -565,28 +615,6 @@ function App() {
                     <span className="nav-badge-pill">Admin</span>
                   </button>
 
-                  {user?.email?.trim().toLowerCase() === "superadmin@gmail.com" && (
-                    <button
-                      className="sidebar-nav-item"
-                      onClick={() => {
-                        setActiveTab("ADMIN");
-                        setIsSidebarOpen(false);
-                        setTimeout(() => {
-                          document.getElementById("superadmin-add-admin-section")?.scrollIntoView({ behavior: "smooth" });
-                        }, 100);
-                      }}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="8.5" cy="7" r="4"></circle>
-                        <line x1="20" y1="8" x2="20" y2="14"></line>
-                        <line x1="23" y1="11" x2="17" y2="11"></line>
-                      </svg>
-                      <span>Add Admin User</span>
-                      <span className="nav-badge-pill" style={{ background: "#eef2ff", color: "#4338ca", border: "1px solid #c7d2fe" }}>Super</span>
-                    </button>
-                  )}
-
                   <button
                     className={`sidebar-nav-item ${activeTab === "EMPLOYEE" ? "active" : ""}`}
                     onClick={() => {
@@ -619,6 +647,35 @@ function App() {
               )}
             </nav>
           </div>
+
+          {/* SUPER ADMIN EXCLUSIVE SIDEBAR SECTION */}
+          {user?.email?.trim().toLowerCase() === "superadmin@gmail.com" && (
+            <div className="sidebar-nav-section" style={{ borderTop: "1px solid #e2e8f0", paddingTop: "14px", marginTop: "14px" }}>
+              <p className="sidebar-section-title" style={{ color: "#4338ca", fontWeight: "700", display: "flex", alignItems: "center", gap: "6px" }}>
+                <span>SUPER ADMIN</span>
+                <span style={{ fontSize: "0.65rem", background: "#eef2ff", color: "#4f46e5", padding: "1px 6px", borderRadius: "999px" }}>ONLY</span>
+              </p>
+              <nav className="sidebar-menu">
+                <button
+                  className="sidebar-nav-item"
+                  style={{ background: "#eef2ff", color: "#4338ca", fontWeight: "600", border: "1px solid #c7d2fe" }}
+                  onClick={() => {
+                    setShowAddAdminModal(true);
+                    setIsSidebarOpen(false);
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="8.5" cy="7" r="4"></circle>
+                    <line x1="20" y1="8" x2="20" y2="14"></line>
+                    <line x1="23" y1="11" x2="17" y2="11"></line>
+                  </svg>
+                  <span>+ Add Admin User</span>
+                  <span className="nav-badge-pill" style={{ background: "#4f46e5", color: "#fff" }}>Super</span>
+                </button>
+              </nav>
+            </div>
+          )}
 
           <div className="sidebar-nav-section quick-jump-section">
             <p className="sidebar-section-title">QUICK ACCESS</p>
@@ -823,6 +880,99 @@ function App() {
             onClose={() => setShowProfileModal(false)}
             onLogout={logout}
           />
+        )}
+
+        {/* Super Admin Quick Add Admin Modal (ONLY for superadmin@gmail.com) */}
+        {showAddAdminModal && user?.email?.trim().toLowerCase() === "superadmin@gmail.com" && (
+          <div className="react-popup-overlay">
+            <div className="react-popup-box" style={{ maxWidth: "440px", textAlign: "left", padding: "26px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
+                <div>
+                  <span style={{ fontSize: "0.72rem", fontWeight: "700", color: "#4f46e5", background: "#eef2ff", padding: "3px 10px", borderRadius: "999px", border: "1px solid #c7d2fe" }}>
+                    👑 SUPER ADMIN ONLY
+                  </span>
+                  <h3 style={{ margin: "8px 0 4px 0", fontSize: "1.25rem", fontWeight: "700", color: "#0f172a" }}>
+                    Add Admin User
+                  </h3>
+                  <p style={{ margin: 0, fontSize: "0.85rem", color: "#64748b" }}>
+                    Create an Administrator using only Email and Password.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setShowAddAdminModal(false); setAdminModalError(""); setAdminModalSuccess(""); }}
+                  style={{ background: "transparent", border: "none", fontSize: "1.3rem", cursor: "pointer", color: "#94a3b8", lineHeight: 1 }}
+                  title="Close"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {adminModalSuccess && (
+                <div style={{ padding: "10px 14px", background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0", borderRadius: "8px", fontSize: "0.85rem", marginBottom: "14px" }}>
+                  ✓ {adminModalSuccess}
+                </div>
+              )}
+
+              {adminModalError && (
+                <div style={{ padding: "10px 14px", background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca", borderRadius: "8px", fontSize: "0.85rem", marginBottom: "14px" }}>
+                  ⚠ {adminModalError}
+                </div>
+              )}
+
+              <form onSubmit={handleQuickAddAdmin}>
+                <div style={{ marginBottom: "14px" }}>
+                  <label htmlFor="quickAdminEmail" style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
+                    Admin Email ID *
+                  </label>
+                  <input
+                    id="quickAdminEmail"
+                    type="email"
+                    required
+                    placeholder="e.g. admin@settribe.com"
+                    value={adminModalEmail}
+                    onChange={(e) => setAdminModalEmail(e.target.value)}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1.5px solid #cbd5e1", fontSize: "0.9rem", boxSizing: "border-box", outline: "none" }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: "18px" }}>
+                  <label htmlFor="quickAdminPassword" style={{ display: "block", fontSize: "0.82rem", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
+                    Password *
+                  </label>
+                  <input
+                    id="quickAdminPassword"
+                    type="password"
+                    required
+                    placeholder="e.g. Password@123"
+                    value={adminModalPassword}
+                    onChange={(e) => setAdminModalPassword(e.target.value)}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1.5px solid #cbd5e1", fontSize: "0.9rem", boxSizing: "border-box", outline: "none" }}
+                  />
+                  <span style={{ fontSize: "0.74rem", color: "#64748b", marginTop: "4px", display: "block" }}>
+                    Must be at least 6 characters with uppercase, lowercase, and a number.
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    onClick={() => { setShowAddAdminModal(false); setAdminModalError(""); setAdminModalSuccess(""); }}
+                    style={{ padding: "9px 16px", borderRadius: "8px", border: "1px solid #cbd5e1", background: "#fff", color: "#475569", fontWeight: "600", cursor: "pointer" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={adminModalLoading}
+                    style={{ padding: "9px 20px", borderRadius: "8px", border: "none", background: "#4f46e5", color: "#fff", fontWeight: "600", cursor: "pointer" }}
+                  >
+                    {adminModalLoading ? "Creating..." : "Create Admin Account"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         )}
       </div>
     );

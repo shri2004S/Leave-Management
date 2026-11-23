@@ -33,7 +33,6 @@ function AdminLeaveManagement() {
   // Super Admin "Add Admin User" State
   const [adminUsers, setAdminUsers] = useState([]);
   const [loadingAdmins, setLoadingAdmins] = useState(false);
-  const [newAdminName, setNewAdminName] = useState("");
   const [newAdminEmail, setNewAdminEmail] = useState("");
   const [newAdminPassword, setNewAdminPassword] = useState("");
   const [newAdminError, setNewAdminError] = useState("");
@@ -58,20 +57,11 @@ function AdminLeaveManagement() {
     setNewAdminError("");
     setNewAdminSuccess("");
 
-    const name = newAdminName.trim();
     const email = newAdminEmail.trim().toLowerCase();
     const password = newAdminPassword;
 
-    if (!name) {
-      setNewAdminError("Full Name is required.");
-      return;
-    }
-    if (/\d/.test(name)) {
-      setNewAdminError("Numbers are not allowed in name. Please use only letters.");
-      return;
-    }
     if (!email || !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/.test(email)) {
-      setNewAdminError("Please enter a valid email address.");
+      setNewAdminError("Please enter a valid admin email address.");
       return;
     }
     if (!password || password.length < 6) {
@@ -86,12 +76,10 @@ function AdminLeaveManagement() {
     setCreateAdminLoading(true);
     try {
       const res = await api.post(`${ADMIN_USERS_API_URL}/create-admin`, {
-        name,
         email,
         password,
       });
       setNewAdminSuccess(res.data?.message || `Admin account for ${email} created successfully!`);
-      setNewAdminName("");
       setNewAdminEmail("");
       setNewAdminPassword("");
       fetchAdmins();
@@ -381,18 +369,6 @@ function AdminLeaveManagement() {
 
           <form onSubmit={handleCreateAdmin} className="superadmin-form">
             <div className="superadmin-input-group">
-              <label htmlFor="adminName">Admin Full Name *</label>
-              <input
-                id="adminName"
-                type="text"
-                placeholder="e.g. Ramesh Kumar"
-                value={newAdminName}
-                onChange={(e) => setNewAdminName(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="superadmin-input-group">
               <label htmlFor="adminEmail">Admin Email ID *</label>
               <input
                 id="adminEmail"
@@ -405,7 +381,7 @@ function AdminLeaveManagement() {
             </div>
 
             <div className="superadmin-input-group">
-              <label htmlFor="adminPassword">Initial Password *</label>
+              <label htmlFor="adminPassword">Password *</label>
               <input
                 id="adminPassword"
                 type="password"

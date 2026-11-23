@@ -59,6 +59,22 @@ public class SuperAdminController {
         return ResponseEntity.ok(admins);
     }
 
+    private String generateAdminName(String email) {
+        if (email == null || !email.contains("@")) return "Admin";
+        String prefix = email.split("@")[0].replaceAll("[._-]", " ").trim();
+        if (prefix.isBlank()) return "Admin";
+        String[] words = prefix.split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (String w : words) {
+            if (!w.isBlank()) {
+                sb.append(Character.toUpperCase(w.charAt(0)))
+                  .append(w.substring(1).toLowerCase())
+                  .append(" ");
+            }
+        }
+        return sb.toString().trim() + " (Admin)";
+    }
+
     @PostMapping("/create-admin")
     public ResponseEntity<Map<String, Object>> createAdmin(
             @Valid @RequestBody CreateAdminRequest request,
@@ -66,11 +82,15 @@ public class SuperAdminController {
         verifySuperAdmin(authentication);
 
         String cleanEmail = request.email().trim().toLowerCase();
-        String cleanName = request.name().trim();
-
-        // Validate name does not contain numbers
-        if (cleanName.matches(".*\\d.*")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Numbers are not allowed in name. Please use only letters.");
+        String cleanName;
+        if (request.name() != null && !request.name().trim().isBlank()) {
+            cleanName = request.name().trim();
+            // Validate name does not contain numbers
+            if (cleanName.matches(".*\\d.*")) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Numbers are not allowed in name. Please use only letters.");
+            }
+        } else {
+            cleanName = generateAdminName(cleanEmail);
         }
 
         // Validate password complexity
