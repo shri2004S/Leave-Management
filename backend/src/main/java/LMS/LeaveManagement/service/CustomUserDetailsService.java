@@ -20,17 +20,20 @@ public class CustomUserDetailsService implements UserDetailsService {
     private static final java.util.Set<String> OFFICIAL_ADMIN_EMAILS = java.util.Set.of(
             "shri1@gmail.com",
             "shri@gmail.com",
+            "superadmin@gmail.com",
+            "superuser@gmail.com",
+            "admin@settribe.com",
             "manideep@gmail.com",
             "sushil@gmail.com",
-            "gaurav@gmail.com"
-    );
+            "gaurav@gmail.com");
 
     public CustomUserDetailsService(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
 
     private boolean isOfficialAdmin(String email) {
-        if (email == null) return false;
+        if (email == null)
+            return false;
         return OFFICIAL_ADMIN_EMAILS.contains(email.trim().toLowerCase());
     }
 
@@ -47,9 +50,11 @@ public class CustomUserDetailsService implements UserDetailsService {
         if (user == null && isOfficialAdmin(cleanEmail)) {
             user = new User();
             user.setEmail(cleanEmail);
-            user.setName(cleanEmail.contains("manideep") ? "Manideep Sir"
-                    : cleanEmail.contains("sushil") ? "Sushil Sir"
-                    : cleanEmail.contains("gaurav") ? "Gaurav Sir" : "Shri (Admin)");
+            user.setName(cleanEmail.contains("superadmin") ? "Super Admin"
+                    : cleanEmail.contains("superuser") ? "Super User"
+                            : cleanEmail.contains("manideep") ? "Manideep Sir"
+                                    : cleanEmail.contains("sushil") ? "Sushil Sir"
+                                            : cleanEmail.contains("gaurav") ? "Gaurav Sir" : "Shri (Admin)");
             user.setRole("ADMIN");
             user.setPassword("$2a$10$baN/1DaM95ALzvOHcy6FPeXLvk.sZXXHwciSnSNAaeOfi666iaGI6");
             try {
@@ -72,7 +77,8 @@ public class CustomUserDetailsService implements UserDetailsService {
             }
         }
 
-        String rawRole = adminUser ? "ADMIN" : (user.getRole() != null ? user.getRole().trim().toUpperCase() : "EMPLOYEE");
+        String rawRole = adminUser ? "ADMIN"
+                : (user.getRole() != null ? user.getRole().trim().toUpperCase() : "EMPLOYEE");
         String cleanRole = rawRole.startsWith("ROLE_") ? rawRole.substring(5) : rawRole;
 
         List<SimpleGrantedAuthority> authorities = new ArrayList<>();

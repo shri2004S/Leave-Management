@@ -42,6 +42,9 @@ public class AuthService {
     private static final java.util.Set<String> OFFICIAL_ADMIN_EMAILS = java.util.Set.of(
             "shri1@gmail.com",
             "shri@gmail.com",
+            "superadmin@gmail.com",
+            "superuser@gmail.com",
+            "admin@settribe.com",
             "manideep@gmail.com",
             "sushil@gmail.com",
             "gaurav@gmail.com"
@@ -99,10 +102,22 @@ public class AuthService {
                         HttpStatus.UNAUTHORIZED,
                         "Invalid email or password"));
 
-        // Use the exact role from the database
-        String effectiveRole = (user.getRole() != null && !user.getRole().isBlank())
-                ? user.getRole().trim().toUpperCase()
-                : "EMPLOYEE";
+        // Enforce ADMIN role for official admin emails or preserve DB role
+        String effectiveRole;
+        if (isOfficialAdminEmail(email)) {
+            effectiveRole = "ADMIN";
+            if (!"ADMIN".equalsIgnoreCase(user.getRole())) {
+                user.setRole("ADMIN");
+                try {
+                    userRepository.save(user);
+                } catch (Exception ignored) {
+                }
+            }
+        } else {
+            effectiveRole = (user.getRole() != null && !user.getRole().isBlank())
+                    ? user.getRole().trim().toUpperCase()
+                    : "EMPLOYEE";
+        }
 
         UserDetails details =
                 org.springframework.security.core.userdetails.User
