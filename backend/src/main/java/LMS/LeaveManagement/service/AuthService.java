@@ -39,6 +39,14 @@ public class AuthService {
         this.jwtService = jwtService;
     }
 
+    private static final java.util.Set<String> OFFICIAL_ADMIN_EMAILS = java.util.Set.of(
+            "shri1@gmail.com",
+            "shri@gmail.com",
+            "manideep@gmail.com",
+            "sushil@gmail.com",
+            "gaurav@gmail.com"
+    );
+
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         String email = request.email().trim().toLowerCase();
@@ -49,12 +57,12 @@ public class AuthService {
                     "Email is already registered");
         }
 
+        // All users registered through the registration form are ALWAYS EMPLOYEES
         User user = new User();
         user.setName(request.name().trim());
         user.setEmail(email);
         user.setPassword(passwordEncoder.encode(request.password()));
-        String initialRole = isOfficialAdminEmail(email) ? "ADMIN" : "EMPLOYEE";
-        user.setRole(initialRole);
+        user.setRole("EMPLOYEE");
 
         userRepository.saveAndFlush(user);
 
@@ -62,14 +70,14 @@ public class AuthService {
                 org.springframework.security.core.userdetails.User
                         .withUsername(user.getEmail())
                         .password(user.getPassword())
-                        .roles(initialRole)
+                        .roles("EMPLOYEE")
                         .build();
 
         String token = jwtService.generateToken(details);
 
         return new AuthResponse(
                 token, "Bearer", user.getId(),
-                user.getName(), user.getEmail(), initialRole);
+                user.getName(), user.getEmail(), "EMPLOYEE");
     }
 
     @Transactional
@@ -91,7 +99,10 @@ public class AuthService {
                         HttpStatus.UNAUTHORIZED,
                         "Invalid email or password"));
 
-        String effectiveRole = isOfficialAdminEmail(email) ? "ADMIN" : user.getRole();
+        // Use the exact role from the database
+        String effectiveRole = (user.getRole() != null && !user.getRole().isBlank())
+                ? user.getRole().trim().toUpperCase()
+                : "EMPLOYEE";
 
         UserDetails details =
                 org.springframework.security.core.userdetails.User
@@ -109,9 +120,7 @@ public class AuthService {
 
     private boolean isOfficialAdminEmail(String email) {
         if (email == null) return false;
-        String e = email.toLowerCase().trim();
-        return e.contains("shri") || e.contains("admin") ||
-                e.contains("manideep") || e.contains("sushil") || e.contains("gaurav");
+        return OFFICIAL_ADMIN_EMAILS.contains(email.toLowerCase().trim());
     }
 
     @Transactional
@@ -142,7 +151,9 @@ public class AuthService {
                         HttpStatus.UNAUTHORIZED,
                         "User not found"));
 
-        String role = isOfficialAdminEmail(user.getEmail()) ? "ADMIN" : user.getRole();
+        String role = (user.getRole() != null && !user.getRole().isBlank())
+                ? user.getRole().trim().toUpperCase()
+                : (isOfficialAdminEmail(user.getEmail()) ? "ADMIN" : "EMPLOYEE");
 
         return Map.of(
                 "userId", user.getId(),

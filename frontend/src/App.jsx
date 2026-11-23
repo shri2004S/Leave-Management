@@ -34,10 +34,11 @@ const OFFICIAL_ADMIN_EMAILS = new Set([
 function normalizeUserRole(userObj) {
   if (!userObj) return userObj;
   const emailLower = userObj.email ? userObj.email.trim().toLowerCase() : "";
-  if (emailLower && (OFFICIAL_ADMIN_EMAILS.has(emailLower) || emailLower.includes("shri") || emailLower.includes("admin"))) {
+  if (emailLower && OFFICIAL_ADMIN_EMAILS.has(emailLower)) {
     return { ...userObj, role: "ADMIN" };
   }
-  return userObj;
+  const role = userObj.role ? userObj.role.trim().toUpperCase() : "EMPLOYEE";
+  return { ...userObj, role };
 }
 
 function validateName(value) {

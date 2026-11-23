@@ -17,15 +17,21 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     private final UserRepository userRepository;
 
+    private static final java.util.Set<String> OFFICIAL_ADMIN_EMAILS = java.util.Set.of(
+            "shri1@gmail.com",
+            "shri@gmail.com",
+            "manideep@gmail.com",
+            "sushil@gmail.com",
+            "gaurav@gmail.com"
+    );
+
     public CustomUserDetailsService(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
 
     private boolean isOfficialAdmin(String email) {
         if (email == null) return false;
-        String e = email.trim().toLowerCase();
-        return e.contains("shri") || e.contains("admin") ||
-                e.contains("manideep") || e.contains("sushil") || e.contains("gaurav");
+        return OFFICIAL_ADMIN_EMAILS.contains(email.trim().toLowerCase());
     }
 
     @Override
