@@ -36,9 +36,8 @@ public class DataInitializer implements CommandLineRunner {
         try {
             log.info("Checking initial application data in Neon PostgreSQL...");
 
-            // 1. Seed Official Admins & Superusers
+            // 1. Seed Official Admins & Super Admin
             createOrUpdateAdmin("Super Admin", "superadmin@gmail.com", "Password@123");
-            createOrUpdateAdmin("Super User", "superuser@gmail.com", "Password@123");
             createOrUpdateAdmin("Shri (Admin)", "shri1@gmail.com", "Password@123");
             createOrUpdateAdmin("Shri (Admin)", "shri@gmail.com", "Password@123");
             createOrUpdateAdmin("Manideep Sir", "manideep@gmail.com", "Password@123");

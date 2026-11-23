@@ -22,7 +22,6 @@ const LIMITS = {
 
 const OFFICIAL_ADMIN_EMAILS = new Set([
   "superadmin@gmail.com",
-  "superuser@gmail.com",
   "admin@settribe.com",
   "shri1@gmail.com",
   "shri@gmail.com",

@@ -34,6 +34,7 @@ export const API_BASE = getApiBase();
 export const AUTH_API_URL = `${API_BASE}/api/auth`;
 export const LEAVES_API_URL = `${API_BASE}/api/leaves`;
 export const ADMIN_API_URL = `${API_BASE}/api/admin/leaves`;
+export const ADMIN_USERS_API_URL = `${API_BASE}/api/admin/users`;
 
 // Create standardized Axios instance
 export const api = axios.create({

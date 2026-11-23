@@ -43,7 +43,6 @@ public class AuthService {
             "shri1@gmail.com",
             "shri@gmail.com",
             "superadmin@gmail.com",
-            "superuser@gmail.com",
             "admin@settribe.com",
             "manideep@gmail.com",
             "sushil@gmail.com",

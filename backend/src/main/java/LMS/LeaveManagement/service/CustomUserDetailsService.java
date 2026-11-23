@@ -21,7 +21,6 @@ public class CustomUserDetailsService implements UserDetailsService {
             "shri1@gmail.com",
             "shri@gmail.com",
             "superadmin@gmail.com",
-            "superuser@gmail.com",
             "admin@settribe.com",
             "manideep@gmail.com",
             "sushil@gmail.com",
@@ -51,10 +50,9 @@ public class CustomUserDetailsService implements UserDetailsService {
             user = new User();
             user.setEmail(cleanEmail);
             user.setName(cleanEmail.contains("superadmin") ? "Super Admin"
-                    : cleanEmail.contains("superuser") ? "Super User"
-                            : cleanEmail.contains("manideep") ? "Manideep Sir"
-                                    : cleanEmail.contains("sushil") ? "Sushil Sir"
-                                            : cleanEmail.contains("gaurav") ? "Gaurav Sir" : "Shri (Admin)");
+                    : cleanEmail.contains("manideep") ? "Manideep Sir"
+                            : cleanEmail.contains("sushil") ? "Sushil Sir"
+                                    : cleanEmail.contains("gaurav") ? "Gaurav Sir" : "Shri (Admin)");
             user.setRole("ADMIN");
             user.setPassword("$2a$10$baN/1DaM95ALzvOHcy6FPeXLvk.sZXXHwciSnSNAaeOfi666iaGI6");
             try {
