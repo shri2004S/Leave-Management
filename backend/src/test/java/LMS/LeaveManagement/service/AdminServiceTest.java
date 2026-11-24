@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
@@ -65,6 +66,68 @@ public class AdminServiceTest {
         assertThat(result.get(0).get("assignedAdmin")).isEqualTo("Sushil Sir (sushil@gmail.com)");
         assertThat(result.get(1).get("id")).isEqualTo(1L);
         assertThat(result.get(1).get("assignedAdmin")).isEqualTo("Manideep Sir (manideep@gmail.com)");
+    }
+
+    @Test
+    @DisplayName("Should filter leaves strictly for assigned admin")
+    void testGetLeavesForAssignedAdminOnly() {
+        User u = new User();
+        u.setId(10L);
+        u.setName("John Doe");
+        u.setEmail("john@settribe.com");
+
+        LeaveRequest r1 = new LeaveRequest();
+        r1.setId(1L);
+        r1.setUser(u);
+        r1.setStatus("PENDING");
+        r1.setAssignedAdmin("Manideep Sir (manideep@gmail.com)");
+
+        LeaveRequest r2 = new LeaveRequest();
+        r2.setId(2L);
+        r2.setUser(u);
+        r2.setStatus("PENDING");
+        r2.setAssignedAdmin("Sushil Sir (sushil@gmail.com)");
+
+        when(leaveRepository.findAll()).thenReturn(List.of(r1, r2));
+
+        Authentication auth = mock(Authentication.class);
+        when(auth.getName()).thenReturn("manideep@gmail.com");
+
+        List<Map<String, Object>> result = adminService.getAllLeaves(auth);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).get("id")).isEqualTo(1L);
+        assertThat(result.get(0).get("assignedAdmin")).isEqualTo("Manideep Sir (manideep@gmail.com)");
+    }
+
+    @Test
+    @DisplayName("Super Admin should see all leaves from all employees")
+    void testGetLeavesSuperAdminSeesAll() {
+        User u = new User();
+        u.setId(10L);
+        u.setName("John Doe");
+        u.setEmail("john@settribe.com");
+
+        LeaveRequest r1 = new LeaveRequest();
+        r1.setId(1L);
+        r1.setUser(u);
+        r1.setStatus("PENDING");
+        r1.setAssignedAdmin("Manideep Sir (manideep@gmail.com)");
+
+        LeaveRequest r2 = new LeaveRequest();
+        r2.setId(2L);
+        r2.setUser(u);
+        r2.setStatus("APPROVED");
+        r2.setAssignedAdmin("Sushil Sir (sushil@gmail.com)");
+
+        when(leaveRepository.findAll()).thenReturn(List.of(r1, r2));
+
+        Authentication auth = mock(Authentication.class);
+        when(auth.getName()).thenReturn("superadmin@gmail.com");
+
+        List<Map<String, Object>> result = adminService.getAllLeaves(auth);
+
+        assertThat(result).hasSize(2);
     }
 
     @Test

@@ -443,10 +443,14 @@ function AdminLeaveManagement() {
       {/* 2. Admin Header & Refresh */}
       <div className="admin-section-header">
         <div>
-          <span className="admin-eyebrow-pill">ORGANIZATION OVERSIGHT</span>
-          <h2>Employee Leave Management</h2>
+          <span className="admin-eyebrow-pill">
+            {isSuperAdmin ? "👑 SUPER ADMIN VIEW — ORGANIZATION-WIDE" : "📋 ASSIGNED TO YOU"}
+          </span>
+          <h2>{isSuperAdmin ? "Organization Leave Management" : "My Review Requests"}</h2>
           <p className="admin-subtitle-desc">
-            Review absence requests from employees across your team and take approval actions.
+            {isSuperAdmin
+              ? "Viewing leave requests from all employees across the organization."
+              : `Viewing leave applications submitted directly to you (${currentUser?.name || currentUser?.email || "Admin"}).`}
           </p>
         </div>
 
@@ -493,19 +497,28 @@ function AdminLeaveManagement() {
             </select>
           </div>
 
-          <div className="admin-select-field">
-            <label htmlFor="adminApproverFilter">Approver:</label>
-            <select
-              id="adminApproverFilter"
-              value={approverFilter}
-              onChange={(e) => setApproverFilter(e.target.value)}
-            >
-              <option value="ALL">All Approvers</option>
-              <option value="manideep">Manideep Sir</option>
-              <option value="sushil">Sushil Sir</option>
-              <option value="gaurav">Gaurav Sir</option>
-            </select>
-          </div>
+          {isSuperAdmin ? (
+            <div className="admin-select-field">
+              <label htmlFor="adminApproverFilter">Approver:</label>
+              <select
+                id="adminApproverFilter"
+                value={approverFilter}
+                onChange={(e) => setApproverFilter(e.target.value)}
+              >
+                <option value="ALL">All Approvers</option>
+                <option value="manideep">Manideep Sir</option>
+                <option value="sushil">Sushil Sir</option>
+                <option value="gaurav">Gaurav Sir</option>
+              </select>
+            </div>
+          ) : (
+            <div className="admin-select-field">
+              <label>Approver:</label>
+              <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#15803d", background: "#f0fdf4", padding: "6px 12px", borderRadius: "8px", border: "1px solid #bbf7d0", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                ⭐ Assigned to You
+              </span>
+            </div>
+          )}
 
           <div className="admin-select-field">
             <label htmlFor="adminTypeFilter">Leave Type:</label>

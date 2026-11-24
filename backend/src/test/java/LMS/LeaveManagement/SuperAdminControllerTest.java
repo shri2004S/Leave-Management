@@ -152,4 +152,32 @@ public class SuperAdminControllerTest {
         assertThat(res.getBody()).hasSize(1);
         assertThat(res.getBody().get(0).get("email")).isEqualTo("superadmin@gmail.com");
     }
+
+    @Test
+    @DisplayName("Should return list of all employees for Super Admin with leave stats")
+    void testGetEmployeesList() {
+        when(authentication.getName()).thenReturn("superadmin@gmail.com");
+
+        User u1 = new User();
+        u1.setId(1L);
+        u1.setName("Super Admin");
+        u1.setEmail("superadmin@gmail.com");
+        u1.setRole("ADMIN");
+
+        User u2 = new User();
+        u2.setId(2L);
+        u2.setName("John Doe");
+        u2.setEmail("john@settribe.com");
+        u2.setRole("EMPLOYEE");
+
+        when(userRepository.findAll()).thenReturn(List.of(u1, u2));
+
+        ResponseEntity<List<Map<String, Object>>> res = controller.getEmployees(authentication);
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(res.getBody()).isNotNull();
+        assertThat(res.getBody()).hasSize(1);
+        assertThat(res.getBody().get(0).get("name")).isEqualTo("John Doe");
+        assertThat(res.getBody().get(0).get("email")).isEqualTo("john@settribe.com");
+        assertThat(res.getBody().get(0).get("role")).isEqualTo("EMPLOYEE");
+    }
 }

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import LMS.LeaveManagement.service.AdminService;
@@ -19,8 +20,8 @@ public class AdminLeaveController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> getAllLeaves() {
-        return ResponseEntity.ok(adminService.getAllLeaves());
+    public ResponseEntity<List<Map<String, Object>>> getAllLeaves(Authentication authentication) {
+        return ResponseEntity.ok(adminService.getAllLeaves(authentication));
     }
 
     @PutMapping("/{id}/status")

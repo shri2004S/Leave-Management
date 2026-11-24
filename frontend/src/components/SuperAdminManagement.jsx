@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { ADMIN_USERS_API_URL, api } from "../apiConfig";
 import "./SuperAdminManagement.css";
 
@@ -18,6 +18,11 @@ export default function SuperAdminManagement({ user }) {
   const [loadingAdmins, setLoadingAdmins] = useState(false);
   const [adminsError, setAdminsError] = useState("");
 
+  const [employees, setEmployees] = useState([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
+  const [employeesError, setEmployeesError] = useState("");
+  const [employeeSearch, setEmployeeSearch] = useState("");
+
   async function fetchAdmins() {
     if (!isSuperAdmin) return;
     setLoadingAdmins(true);
@@ -32,6 +37,20 @@ export default function SuperAdminManagement({ user }) {
     }
   }
 
+  async function fetchEmployees() {
+    if (!isSuperAdmin) return;
+    setLoadingEmployees(true);
+    setEmployeesError("");
+    try {
+      const res = await api.get(`${ADMIN_USERS_API_URL}/employees`);
+      setEmployees(res.data || []);
+    } catch (err) {
+      setEmployeesError(err.response?.data?.message || err.message || "Failed to load employees.");
+    } finally {
+      setLoadingEmployees(false);
+    }
+  }
+
   useEffect(() => {
     let active = true;
     if (isSuperAdmin) {
@@ -41,6 +60,14 @@ export default function SuperAdminManagement({ user }) {
         })
         .catch((err) => {
           if (active) setAdminsError(err.response?.data?.message || err.message || "Failed to load admin users.");
+        });
+
+      api.get(`${ADMIN_USERS_API_URL}/employees`)
+        .then((res) => {
+          if (active) setEmployees(res.data || []);
+        })
+        .catch((err) => {
+          if (active) setEmployeesError(err.response?.data?.message || err.message || "Failed to load employees.");
         });
     }
     return () => {
@@ -112,6 +139,16 @@ export default function SuperAdminManagement({ user }) {
       return "Active Admin";
     }
   };
+
+  const filteredEmployees = useMemo(() => {
+    if (!employeeSearch.trim()) return employees;
+    const term = employeeSearch.trim().toLowerCase();
+    return employees.filter(
+      (emp) =>
+        (emp.name && emp.name.toLowerCase().includes(term)) ||
+        (emp.email && emp.email.toLowerCase().includes(term))
+    );
+  }, [employees, employeeSearch]);
 
   if (!isSuperAdmin) {
     return (
@@ -340,6 +377,115 @@ export default function SuperAdminManagement({ user }) {
                       </span>
                       <span className="date-indicator">
                         {adm.createdAt ? formatDate(adm.createdAt) : "Active Admin"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Registered Employees Section (SUPER ADMIN ONLY) */}
+      <div className="superadmin-card employees-list-card">
+        <div className="admins-list-header">
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span className="superadmin-crown-badge" style={{ marginBottom: 0 }}>👑 SUPER ADMIN EXCLUSIVE</span>
+              <h2 className="card-heading" style={{ margin: 0 }}>
+                All Employees Directory ({employees.length})
+              </h2>
+            </div>
+            <p className="card-subheading">
+              Complete oversight of all registered employees and their leave statistics across the organization.
+            </p>
+          </div>
+          <button
+            className="admins-refresh-btn"
+            onClick={fetchEmployees}
+            disabled={loadingEmployees}
+            title="Refresh employees directory"
+          >
+            <svg className={loadingEmployees ? "spin" : ""} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+            </svg>
+            <span>Refresh</span>
+          </button>
+        </div>
+
+        {/* Employee Search Bar */}
+        <div style={{ marginTop: "16px", marginBottom: "16px" }}>
+          <div className="input-with-icon" style={{ maxWidth: "420px" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input
+              type="text"
+              placeholder="Search employee by name or email..."
+              value={employeeSearch}
+              onChange={(e) => setEmployeeSearch(e.target.value)}
+              style={{ padding: "10px 12px 10px 38px", width: "100%", borderRadius: "8px", border: "1.5px solid #cbd5e1", boxSizing: "border-box" }}
+            />
+          </div>
+        </div>
+
+        {employeesError && (
+          <div className="superadmin-alert error" style={{ margin: "16px 0" }}>
+            <span>{employeesError}</span>
+          </div>
+        )}
+
+        {loadingEmployees && employees.length === 0 ? (
+          <div className="admins-loading-state">
+            <span className="btn-spinner large"></span>
+            <p>Loading employee directory...</p>
+          </div>
+        ) : filteredEmployees.length === 0 ? (
+          <div style={{ padding: "32px", textAlign: "center", color: "#64748b" }}>
+            <p style={{ margin: 0 }}>
+              {employeeSearch ? "No employees match your search." : "No registered employees found in the system."}
+            </p>
+          </div>
+        ) : (
+          <div className="admins-cards-grid">
+            {filteredEmployees.map((emp) => {
+              const empInitials = getInitials(emp.name, emp.email);
+              return (
+                <div key={emp.id} className="admin-member-card">
+                  <div className="admin-member-avatar" style={{ background: "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)" }}>
+                    {empInitials}
+                  </div>
+                  <div className="admin-member-details">
+                    <div className="admin-member-name-row">
+                      <h4 className="admin-member-name">{emp.name}</h4>
+                      <span className="admin-member-badge standard" style={{ background: "#f0fdf4", color: "#16a34a", borderColor: "#bbf7d0" }}>
+                        EMPLOYEE
+                      </span>
+                    </div>
+                    <p className="admin-member-email">{emp.email}</p>
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", margin: "8px 0" }}>
+                      <span style={{ fontSize: "0.72rem", padding: "2px 8px", background: "#f1f5f9", color: "#475569", borderRadius: "999px", fontWeight: 600 }}>
+                        {emp.totalRequests || 0} Total Requests
+                      </span>
+                      {emp.pendingRequests > 0 && (
+                        <span style={{ fontSize: "0.72rem", padding: "2px 8px", background: "#fffbeb", color: "#b45309", borderRadius: "999px", fontWeight: 600 }}>
+                          {emp.pendingRequests} Pending
+                        </span>
+                      )}
+                      {emp.approvedRequests > 0 && (
+                        <span style={{ fontSize: "0.72rem", padding: "2px 8px", background: "#f0fdf4", color: "#15803d", borderRadius: "999px", fontWeight: 600 }}>
+                          {emp.approvedRequests} Approved
+                        </span>
+                      )}
+                    </div>
+                    <div className="admin-member-meta">
+                      <span className="status-indicator">
+                        <span className="status-dot"></span> Active Employee
+                      </span>
+                      <span className="date-indicator">
+                        {emp.createdAt ? formatDate(emp.createdAt) : "Active"}
                       </span>
                     </div>
                   </div>

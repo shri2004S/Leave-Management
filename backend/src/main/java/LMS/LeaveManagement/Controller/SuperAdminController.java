@@ -1,7 +1,9 @@
 package LMS.LeaveManagement.Controller;
 
 import LMS.LeaveManagement.dto.CreateAdminRequest;
+import LMS.LeaveManagement.entity.LeaveRequest;
 import LMS.LeaveManagement.entity.User;
+import LMS.LeaveManagement.repository.LeaveRequestRepository;
 import LMS.LeaveManagement.repository.UserRepository;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -25,10 +27,16 @@ public class SuperAdminController {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final LeaveRequestRepository leaveRequestRepository;
 
     public SuperAdminController(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+        this(userRepository, passwordEncoder, null);
+    }
+
+    public SuperAdminController(UserRepository userRepository, PasswordEncoder passwordEncoder, LeaveRequestRepository leaveRequestRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.leaveRequestRepository = leaveRequestRepository;
     }
 
     private void verifySuperAdmin(Authentication authentication) {
@@ -60,6 +68,46 @@ public class SuperAdminController {
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(admins);
+    }
+
+    @GetMapping("/employees")
+    public ResponseEntity<List<Map<String, Object>>> getEmployees(Authentication authentication) {
+        verifySuperAdmin(authentication);
+
+        List<LeaveRequest> allLeaves = leaveRequestRepository != null ? leaveRequestRepository.findAll() : List.of();
+
+        List<Map<String, Object>> employees = userRepository.findAll().stream()
+                .filter(u -> "EMPLOYEE".equalsIgnoreCase(u.getRole()))
+                .sorted((a, b) -> a.getId().compareTo(b.getId()))
+                .map(u -> {
+                    long totalRequests = allLeaves.stream()
+                            .filter(l -> l.getUser() != null && u.getId().equals(l.getUser().getId()))
+                            .count();
+                    long pendingRequests = allLeaves.stream()
+                            .filter(l -> l.getUser() != null && u.getId().equals(l.getUser().getId()) && "PENDING".equalsIgnoreCase(l.getStatus()))
+                            .count();
+                    long approvedRequests = allLeaves.stream()
+                            .filter(l -> l.getUser() != null && u.getId().equals(l.getUser().getId()) && "APPROVED".equalsIgnoreCase(l.getStatus()))
+                            .count();
+                    long rejectedRequests = allLeaves.stream()
+                            .filter(l -> l.getUser() != null && u.getId().equals(l.getUser().getId()) && "REJECTED".equalsIgnoreCase(l.getStatus()))
+                            .count();
+
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("id", u.getId());
+                    map.put("name", u.getName());
+                    map.put("email", u.getEmail());
+                    map.put("role", u.getRole());
+                    map.put("createdAt", u.getCreatedAt() != null ? u.getCreatedAt().toString() : "");
+                    map.put("totalRequests", totalRequests);
+                    map.put("pendingRequests", pendingRequests);
+                    map.put("approvedRequests", approvedRequests);
+                    map.put("rejectedRequests", rejectedRequests);
+                    return map;
+                })
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(employees);
     }
 
     private String generateAdminName(String email) {
