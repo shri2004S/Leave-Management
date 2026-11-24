@@ -45,10 +45,7 @@ public class AuthService {
     public static final String ROLE_EMPLOYEE = "EMPLOYEE";
 
     private static final java.util.Set<String> OFFICIAL_ADMIN_EMAILS = java.util.Set.of(
-            "shri1@gmail.com",
-            "shri@gmail.com",
             SUPER_ADMIN_EMAIL,
-            "admin@settribe.com",
             "manideep@gmail.com",
             "sushil@gmail.com",
             "gaurav@gmail.com");

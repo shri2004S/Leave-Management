@@ -37,13 +37,33 @@ public class DataInitializer implements CommandLineRunner {
 
             // 1. Seed Official Admins & Super Admin
             createOrUpdateAdmin("Super Admin", "superadmin@gmail.com", "Password@123");
-            createOrUpdateAdmin("Shri (Admin)", "shri1@gmail.com", "Password@123");
-            createOrUpdateAdmin("Shri (Admin)", "shri@gmail.com", "Password@123");
             createOrUpdateAdmin("Manideep Sir", "manideep@gmail.com", "Password@123");
             createOrUpdateAdmin("Sushil Sir", "sushil@gmail.com", "Password@123");
             createOrUpdateAdmin("Gaurav Sir", "gaurav@gmail.com", "Password@123");
 
-            // 2. Seed Employee
+            // 2. Ensure any legacy accounts revert to EMPLOYEE role
+            userRepository.findByEmail("shri@gmail.com").ifPresent(u -> {
+                if ("ADMIN".equalsIgnoreCase(u.getRole())) {
+                    u.setRole("EMPLOYEE");
+                    if (u.getName() != null && u.getName().contains("(Admin)")) {
+                        u.setName("Shri");
+                    }
+                    userRepository.save(u);
+                    log.info("Reset shri@gmail.com role to EMPLOYEE");
+                }
+            });
+            userRepository.findByEmail("shri1@gmail.com").ifPresent(u -> {
+                if ("ADMIN".equalsIgnoreCase(u.getRole())) {
+                    u.setRole("EMPLOYEE");
+                    if (u.getName() != null && u.getName().contains("(Admin)")) {
+                        u.setName("Shri");
+                    }
+                    userRepository.save(u);
+                    log.info("Reset shri1@gmail.com role to EMPLOYEE");
+                }
+            });
+
+            // 3. Seed Employee
             User john = createOrGetEmployee("John Doe", "john@settribe.com", "Password@123");
 
             // 3. Seed Sample Leave Requests if table is empty

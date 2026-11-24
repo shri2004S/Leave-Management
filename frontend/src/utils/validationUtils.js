@@ -15,9 +15,6 @@ export const LIMITS = {
 
 export const OFFICIAL_ADMIN_EMAILS = new Set([
   "superadmin@gmail.com",
-  "admin@settribe.com",
-  "shri1@gmail.com",
-  "shri@gmail.com",
   "manideep@gmail.com",
   "sushil@gmail.com",
   "gaurav@gmail.com",
