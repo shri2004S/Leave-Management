@@ -33,64 +33,24 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) {
         try {
-            log.info("Checking initial application data in Neon PostgreSQL...");
+            log.info("Checking initial application data in database...");
 
-            // 1. Seed Official Admins & Super Admin
+            // 1. Seed Official Reviewer Admins & Super Admin
             createOrUpdateAdmin("Super Admin", "superadmin@gmail.com", "Password@123");
             createOrUpdateAdmin("Manideep Sir", "manideep@gmail.com", "Password@123");
             createOrUpdateAdmin("Sushil Sir", "sushil@gmail.com", "Password@123");
             createOrUpdateAdmin("Gaurav Sir", "gaurav@gmail.com", "Password@123");
 
-            // 2. Ensure any legacy accounts revert to EMPLOYEE role
-            userRepository.findByEmail("shri@gmail.com").ifPresent(u -> {
-                if ("ADMIN".equalsIgnoreCase(u.getRole())) {
-                    u.setRole("EMPLOYEE");
-                    if (u.getName() != null && u.getName().contains("(Admin)")) {
-                        u.setName("Shri");
-                    }
-                    userRepository.save(u);
-                    log.info("Reset shri@gmail.com role to EMPLOYEE");
-                }
-            });
-            userRepository.findByEmail("shri1@gmail.com").ifPresent(u -> {
-                if ("ADMIN".equalsIgnoreCase(u.getRole())) {
-                    u.setRole("EMPLOYEE");
-                    if (u.getName() != null && u.getName().contains("(Admin)")) {
-                        u.setName("Shri");
-                    }
-                    userRepository.save(u);
-                    log.info("Reset shri1@gmail.com role to EMPLOYEE");
-                }
-            });
+            // 2. Ensure non-admin accounts strictly retain EMPLOYEE role
+            ensureEmployeeRole("shri@gmail.com", "Shri");
+            ensureEmployeeRole("shri1@gmail.com", "Shri");
 
-            // 3. Seed Employee
+            // 3. Seed Default Test Employee (John Doe)
             User john = createOrGetEmployee("John Doe", "john@settribe.com", "Password@123");
 
-            // 3. Seed Sample Leave Requests if table is empty
+            // 4. Seed Sample Leave Requests for initial testing if empty
             if (leaveRequestRepository.count() == 0 && john != null) {
-                log.info("Seeding initial sample leave requests for employee {}...", john.getEmail());
-
-                LeaveRequest r1 = new LeaveRequest();
-                r1.setUser(john);
-                r1.setLeaveType("CASUAL");
-                r1.setFromDate(LocalDate.now().plusDays(2));
-                r1.setToDate(LocalDate.now().plusDays(4));
-                r1.setReason("Attending family wedding ceremony");
-                r1.setStatus("PENDING");
-                r1.setAssignedAdmin("Manideep Sir (manideep@gmail.com)");
-                r1.setSharedWith("Manideep Sir (manideep@gmail.com)");
-                leaveRequestRepository.save(r1);
-
-                LeaveRequest r2 = new LeaveRequest();
-                r2.setUser(john);
-                r2.setLeaveType("SICK");
-                r2.setFromDate(LocalDate.now().minusDays(10));
-                r2.setToDate(LocalDate.now().minusDays(9));
-                r2.setReason("Severe fever and doctor consultation");
-                r2.setStatus("APPROVED");
-                r2.setAssignedAdmin("Sushil Sir (sushil@gmail.com)");
-                r2.setSharedWith("Sushil Sir (sushil@gmail.com)");
-                leaveRequestRepository.save(r2);
+                seedSampleLeaveRequests(john);
             }
 
             log.info("Initial application data check completed successfully.");
@@ -100,7 +60,8 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void createOrUpdateAdmin(String name, String email, String password) {
-        userRepository.findByEmail(email).ifPresentOrElse(
+        String cleanEmail = email.trim().toLowerCase();
+        userRepository.findByEmail(cleanEmail).ifPresentOrElse(
                 user -> {
                     boolean changed = false;
                     if (name != null && !name.equalsIgnoreCase(user.getName())) {
@@ -115,7 +76,7 @@ public class DataInitializer implements CommandLineRunner {
                             && !passwordEncoder.matches("Shri1234@", user.getPassword())) {
                         user.setPassword(passwordEncoder.encode(password));
                         changed = true;
-                        log.info("Synchronized official admin credentials for: {}", email);
+                        log.info("Synchronized official admin credentials for: {}", cleanEmail);
                     }
                     if (changed) {
                         userRepository.save(user);
@@ -124,24 +85,79 @@ public class DataInitializer implements CommandLineRunner {
                 () -> {
                     User admin = new User();
                     admin.setName(name);
-                    admin.setEmail(email);
+                    admin.setEmail(cleanEmail);
                     admin.setPassword(passwordEncoder.encode(password));
                     admin.setRole("ADMIN");
                     userRepository.save(admin);
-                    log.info("Created Admin account: {}", email);
+                    log.info("Created Admin account: {}", cleanEmail);
                 });
     }
 
+    private void ensureEmployeeRole(String email, String defaultName) {
+        String cleanEmail = email.trim().toLowerCase();
+        userRepository.findByEmail(cleanEmail).ifPresent(user -> {
+            boolean changed = false;
+            if (!"EMPLOYEE".equalsIgnoreCase(user.getRole())) {
+                user.setRole("EMPLOYEE");
+                changed = true;
+            }
+            if (user.getName() != null && user.getName().contains("(Admin)")) {
+                user.setName(user.getName().replace("(Admin)", "").trim());
+                if (user.getName().isBlank()) {
+                    user.setName(defaultName);
+                }
+                changed = true;
+            }
+            if (changed) {
+                userRepository.save(user);
+                log.info("Ensured {} is set to EMPLOYEE role", cleanEmail);
+            }
+        });
+    }
+
     private User createOrGetEmployee(String name, String email, String password) {
-        return userRepository.findByEmail(email).orElseGet(() -> {
+        String cleanEmail = email.trim().toLowerCase();
+        return userRepository.findByEmail(cleanEmail).map(user -> {
+            if (!"EMPLOYEE".equalsIgnoreCase(user.getRole())) {
+                user.setRole("EMPLOYEE");
+                return userRepository.save(user);
+            }
+            return user;
+        }).orElseGet(() -> {
             User emp = new User();
             emp.setName(name);
-            emp.setEmail(email);
+            emp.setEmail(cleanEmail);
             emp.setPassword(passwordEncoder.encode(password));
             emp.setRole("EMPLOYEE");
             User saved = userRepository.save(emp);
-            log.info("Created test employee account: {}", email);
+            log.info("Created test employee account: {}", cleanEmail);
             return saved;
         });
+    }
+
+    private void seedSampleLeaveRequests(User employee) {
+        log.info("Seeding initial sample leave requests for employee {}...", employee.getEmail());
+
+        LeaveRequest r1 = new LeaveRequest();
+        r1.setUser(employee);
+        r1.setLeaveType("CASUAL");
+        r1.setFromDate(LocalDate.now().plusDays(2));
+        r1.setToDate(LocalDate.now().plusDays(4));
+        r1.setReason("Attending family wedding ceremony");
+        r1.setStatus("PENDING");
+        r1.setAssignedAdmin("Manideep Sir (manideep@gmail.com)");
+        r1.setSharedWith("Manideep Sir (manideep@gmail.com)");
+        leaveRequestRepository.save(r1);
+
+        LeaveRequest r2 = new LeaveRequest();
+        r2.setUser(employee);
+        r2.setLeaveType("SICK");
+        r2.setFromDate(LocalDate.now().minusDays(10));
+        r2.setToDate(LocalDate.now().minusDays(9));
+        r2.setReason("Severe fever and doctor consultation");
+        r2.setStatus("APPROVED");
+        r2.setAssignedAdmin("Sushil Sir (sushil@gmail.com)");
+        r2.setSharedWith("Sushil Sir (sushil@gmail.com)");
+        leaveRequestRepository.save(r2);
     }
 }
