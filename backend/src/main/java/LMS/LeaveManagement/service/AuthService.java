@@ -132,9 +132,13 @@ public class AuthService {
 
         String token = jwtService.generateToken(details);
 
+        String displayName = "superadmin@gmail.com".equalsIgnoreCase(user.getEmail())
+                ? "Super Admin"
+                : (user.getName() != null ? user.getName() : "User");
+
         return new AuthResponse(
                 token, "Bearer", user.getId(),
-                user.getName(), user.getEmail(), effectiveRole);
+                displayName, user.getEmail(), effectiveRole);
     }
 
     private boolean isOfficialAdminEmail(String email) {

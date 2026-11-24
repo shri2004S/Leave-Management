@@ -48,7 +48,7 @@ public class SuperAdminController {
                 .map(u -> {
                     Map<String, Object> map = new HashMap<>();
                     map.put("id", u.getId());
-                    map.put("name", u.getName());
+                    map.put("name", "superadmin@gmail.com".equalsIgnoreCase(u.getEmail()) ? "Super Admin" : u.getName());
                     map.put("email", u.getEmail());
                     map.put("role", u.getRole());
                     map.put("createdAt", u.getCreatedAt() != null ? u.getCreatedAt().toString() : "");

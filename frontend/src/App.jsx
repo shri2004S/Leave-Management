@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import ApplyLeave from "./components/ApplyLeave";
 import MyLeaveRequests from "./components/MyLeaveRequests";
 import AdminLeaveManagement from "./components/AdminLeaveManagement";
+import SuperAdminManagement from "./components/SuperAdminManagement";
 import UserProfileModal from "./components/UserProfileModal";
 import "./App.css";
 
@@ -36,15 +37,14 @@ const OFFICIAL_ADMIN_EMAILS = new Set([
 function normalizeUserRole(userObj) {
   if (!userObj) return userObj;
   const emailLower = userObj.email ? userObj.email.trim().toLowerCase() : "";
-  let name = userObj.name;
   if (emailLower === "superadmin@gmail.com") {
-    name = "Super Admin";
+    return { ...userObj, name: "Super Admin", role: "ADMIN" };
   }
   if (emailLower && OFFICIAL_ADMIN_EMAILS.has(emailLower)) {
-    return { ...userObj, name: name || "Super Admin", role: "ADMIN" };
+    return { ...userObj, name: userObj.name || "Admin", role: "ADMIN" };
   }
   const role = userObj.role ? userObj.role.trim().toUpperCase() : "EMPLOYEE";
-  return { ...userObj, name: name || userObj.name, role };
+  return { ...userObj, name: userObj.name, role };
 }
 
 function validateName(value) {
@@ -526,12 +526,15 @@ function App() {
 
   // Helper for user avatar initials
   const getInitials = (name, email) => {
+    const emailLower = email ? email.trim().toLowerCase() : "";
+    if (emailLower === "superadmin@gmail.com") return "SA";
     if (name) {
-      const parts = name.trim().split(" ");
+      const cleaned = name.replace(/[()]/g, "").trim();
+      const parts = cleaned.split(/\s+/).filter(Boolean);
       if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-      return name.slice(0, 2).toUpperCase();
+      return cleaned.slice(0, 2).toUpperCase();
     }
-    return email ? email.slice(0, 2).toUpperCase() : "U";
+    return emailLower ? emailLower.slice(0, 2).toUpperCase() : "U";
   };
 
   // Get formatted today date
@@ -540,7 +543,10 @@ function App() {
   // ---------- DASHBOARD LAYOUT ----------
   if (user) {
     const isAdmin = user.role === "ADMIN";
-    const initials = getInitials(user.name, user.email);
+    const isSuperAdmin = user?.email?.trim().toLowerCase() === "superadmin@gmail.com";
+    const displayName = isSuperAdmin ? "Super Admin" : (user?.name || "Employee");
+    const displayRole = isSuperAdmin ? "SUPER ADMIN" : user?.role;
+    const initials = isSuperAdmin ? "SA" : getInitials(displayName, user?.email);
 
     return (
       <div className="dashboard-app-container">
@@ -614,6 +620,26 @@ function App() {
                     <span>Admin Portal</span>
                     <span className="nav-badge-pill">Admin</span>
                   </button>
+
+                  {/* SUPER ADMIN ONLY: Add Admin User Page */}
+                  {isSuperAdmin && (
+                    <button
+                      className={`sidebar-nav-item ${activeTab === "ADD_ADMIN" ? "active" : ""}`}
+                      onClick={() => {
+                        setActiveTab("ADD_ADMIN");
+                        setIsSidebarOpen(false);
+                      }}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="8.5" cy="7" r="4"></circle>
+                        <line x1="20" y1="8" x2="20" y2="14"></line>
+                        <line x1="23" y1="11" x2="17" y2="11"></line>
+                      </svg>
+                      <span>Add Admin User</span>
+                      <span className="nav-badge-pill" style={{ background: "#4f46e5", color: "#fff" }}>Super</span>
+                    </button>
+                  )}
 
                   <button
                     className={`sidebar-nav-item ${activeTab === "EMPLOYEE" ? "active" : ""}`}
@@ -746,11 +772,11 @@ function App() {
             >
               <div className="avatar-circle">{initials}</div>
               <div className="user-info-text">
-                <p className="user-name-label">{user.name || "Employee"}</p>
+                <p className="user-name-label">{displayName}</p>
                 <p className="user-email-label">{user.email}</p>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                  <span className={`role-pill ${user.role.toLowerCase()}`}>
-                    {user.role}
+                  <span className={`role-pill ${isSuperAdmin ? "super-admin" : user.role.toLowerCase()}`}>
+                    {displayRole}
                   </span>
                   <span className="profile-card-action-hint">View Profile &rarr;</span>
                 </div>
@@ -774,10 +800,16 @@ function App() {
           <header className="main-topbar">
             <div className="topbar-left">
               <h1 className="topbar-title">
-                {isAdmin && activeTab === "ADMIN" ? "Admin Management Portal" : "Employee Leave Dashboard"}
+                {isSuperAdmin && activeTab === "ADD_ADMIN"
+                  ? "Super Admin Portal — Add Admin User"
+                  : isAdmin && activeTab === "ADMIN"
+                  ? "Admin Management Portal"
+                  : "Employee Leave Dashboard"}
               </h1>
               <p className="topbar-subtitle">
-                {isAdmin && activeTab === "ADMIN"
+                {isSuperAdmin && activeTab === "ADD_ADMIN"
+                  ? "Create and manage system administrator accounts using email and password."
+                  : isAdmin && activeTab === "ADMIN"
                   ? "Review, approve, or reject organization leave applications in real time."
                   : "Submit new leave applications, track approval statuses, and manage your records."}
               </p>
@@ -807,6 +839,22 @@ function App() {
                     </svg>
                     <span>Admin View</span>
                   </button>
+
+                  {isSuperAdmin && (
+                    <button
+                      className={`switch-tab-btn ${activeTab === "ADD_ADMIN" ? "active" : ""}`}
+                      onClick={() => setActiveTab("ADD_ADMIN")}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="8.5" cy="7" r="4"></circle>
+                        <line x1="20" y1="8" x2="20" y2="14"></line>
+                        <line x1="23" y1="11" x2="17" y2="11"></line>
+                      </svg>
+                      <span>Add Admin User</span>
+                    </button>
+                  )}
+
                   <button
                     className={`switch-tab-btn ${activeTab === "EMPLOYEE" ? "active" : ""}`}
                     onClick={() => setActiveTab("EMPLOYEE")}
@@ -827,9 +875,9 @@ function App() {
               >
                 <div className="topbar-avatar-badge">{initials}</div>
                 <div className="topbar-profile-info">
-                  <span className="topbar-profile-name">{user.name || user.email}</span>
-                  <span className={`topbar-role-tag ${user.role?.toLowerCase()}`}>
-                    {user.role} Profile &rarr;
+                  <span className="topbar-profile-name">{displayName}</span>
+                  <span className={`topbar-role-tag ${isSuperAdmin ? "super-admin" : user.role?.toLowerCase()}`}>
+                    {displayRole} Profile &rarr;
                   </span>
                 </div>
               </button>
@@ -839,10 +887,18 @@ function App() {
           {/* Welcome Greeting Banner */}
           <section className="welcome-banner-card">
             <div className="welcome-banner-content">
-              <span className="welcome-tag-pill">PORTAL ACTIVE</span>
-              <h2>Welcome back, {user.name || user.email}!</h2>
+              <span className="welcome-tag-pill">
+                {isSuperAdmin && activeTab === "ADD_ADMIN"
+                  ? "SUPER ADMIN PORTAL"
+                  : isAdmin && activeTab === "ADMIN"
+                  ? "ADMIN PORTAL ACTIVE"
+                  : "PORTAL ACTIVE"}
+              </span>
+              <h2>Welcome back, {displayName}!</h2>
               <p>
-                {isAdmin && activeTab === "ADMIN"
+                {isSuperAdmin && activeTab === "ADD_ADMIN"
+                  ? "You have exclusive authority to create and manage system administrator accounts using email and password."
+                  : isAdmin && activeTab === "ADMIN"
                   ? "Here is your administrative command center for organizational attendance and approvals."
                   : "You can apply for casual, sick, or earned leaves below and monitor their statuses live."}
               </p>
@@ -858,7 +914,9 @@ function App() {
 
           {/* Tab Content */}
           <main className="dashboard-content-area">
-            {isAdmin && activeTab === "ADMIN" ? (
+            {isSuperAdmin && activeTab === "ADD_ADMIN" ? (
+              <SuperAdminManagement user={user} />
+            ) : isAdmin && activeTab === "ADMIN" ? (
               <AdminLeaveManagement />
             ) : (
               <>
