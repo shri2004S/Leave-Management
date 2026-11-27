@@ -26,7 +26,7 @@ services:
       # Enable HTTPS-only cookies on Render
       - key: APP_COOKIE_SECURE
         value: "true"
-      # Memory tuning for Render Free Tier (512MB RAM)
+      # Memory tuning for Render Free Tier (512MB RAM container limit)
       - key: JAVA_OPTS
-        value: "-Xms256m -Xmx480m -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError"
+        value: "-Xms128m -Xmx256m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError"
 

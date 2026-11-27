@@ -5,9 +5,12 @@ import LMS.LeaveManagement.dto.ForgotPasswordRequest;
 import LMS.LeaveManagement.dto.LoginRequest;
 import LMS.LeaveManagement.dto.RegisterRequest;
 import LMS.LeaveManagement.entity.User;
+import LMS.LeaveManagement.repository.RoleRepository;
 import LMS.LeaveManagement.repository.UserRepository;
 import LMS.LeaveManagement.security.JwtService;
+import LMS.LeaveManagement.security.RbacConstants;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -18,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Service
@@ -27,16 +31,28 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
+    private final RoleRepository roleRepository;
 
     public AuthService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             AuthenticationManager authenticationManager,
             JwtService jwtService) {
+        this(userRepository, passwordEncoder, authenticationManager, jwtService, null);
+    }
+
+    @Autowired
+    public AuthService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            AuthenticationManager authenticationManager,
+            JwtService jwtService,
+            RoleRepository roleRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
+        this.roleRepository = roleRepository;
     }
 
     public static final String SUPER_ADMIN_EMAIL = "superadmin@gmail.com";
@@ -60,12 +76,15 @@ public class AuthService {
                     "Email is already registered");
         }
 
-        // All users registered through the registration form are ALWAYS EMPLOYEES
+        // All users registered through the public registration form are ALWAYS EMPLOYEES
         User user = new User();
         user.setName(request.name().trim());
         user.setEmail(email);
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setRole(ROLE_EMPLOYEE);
+        if (roleRepository != null) {
+            roleRepository.findByNameIgnoreCase(ROLE_EMPLOYEE).ifPresent(user::setAssignedRole);
+        }
 
         userRepository.saveAndFlush(user);
 
@@ -137,9 +156,7 @@ public class AuthService {
             }
             return ROLE_ADMIN;
         }
-        return (user.getRole() != null && !user.getRole().isBlank())
-                ? user.getRole().trim().toUpperCase()
-                : ROLE_EMPLOYEE;
+        return RbacConstants.normalizeRole(user.getRole());
     }
 
     private String resolveDisplayName(User user) {
@@ -187,14 +204,23 @@ public class AuthService {
                         HttpStatus.UNAUTHORIZED,
                         "User not found"));
 
-        String role = (user.getRole() != null && !user.getRole().isBlank())
-                ? user.getRole().trim().toUpperCase()
-                : (isOfficialAdminEmail(user.getEmail()) ? ROLE_ADMIN : ROLE_EMPLOYEE);
+        String role = isOfficialAdminEmail(user.getEmail())
+                ? ROLE_ADMIN
+                : RbacConstants.normalizeRole(user.getRole());
 
-        return Map.of(
-                "userId", user.getId(),
-                "name", resolveDisplayName(user),
-                "email", user.getEmail(),
-                "role", role);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("userId", user.getId());
+        result.put("name", resolveDisplayName(user));
+        result.put("email", user.getEmail());
+        result.put("role", role);
+        result.put("department", user.getDepartment() != null ? user.getDepartment() : "");
+        result.put("designation", user.getDesignation() != null ? user.getDesignation() : "");
+        result.put("phone", user.getPhone() != null ? user.getPhone() : "");
+        result.put("managerId", user.getManager() != null ? user.getManager().getId() : null);
+        result.put("managerName", user.getManager() != null ? user.getManager().getName() : "");
+        result.put("managerEmail", user.getManager() != null ? user.getManager().getEmail() : "");
+        result.put("permissions", RbacConstants.getPermissionsForRole(role));
+        result.put("createdAt", user.getCreatedAt() != null ? user.getCreatedAt().toString() : "");
+        return result;
     }
 }

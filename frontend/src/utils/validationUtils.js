@@ -23,6 +23,30 @@ export const OFFICIAL_ADMIN_EMAILS = new Set([
   "gauravsir@gmail.com",
 ]);
 
+export const VALID_ROLES = new Set(["ADMIN", "MANAGER", "EMPLOYEE", "USER"]);
+
+export const ROLE_PERMISSIONS = {
+  ADMIN: [
+    "EMPLOYEE_READ_ALL", "EMPLOYEE_CREATE", "EMPLOYEE_UPDATE", "EMPLOYEE_DELETE",
+    "USER_MANAGE", "LEAVE_APPROVE_ALL",
+    "EMPLOYEE_READ_ASSIGNED", "EMPLOYEE_UPDATE_ASSIGNED", "LEAVE_MANAGE_ASSIGNED",
+    "LEAVE_APPLY", "LEAVE_READ_OWN", "REPORT_READ_OWN",
+    "PROFILE_READ_OWN", "PROFILE_UPDATE_OWN",
+  ],
+  MANAGER: [
+    "EMPLOYEE_READ_ASSIGNED", "EMPLOYEE_UPDATE_ASSIGNED", "LEAVE_MANAGE_ASSIGNED",
+    "LEAVE_APPLY", "LEAVE_READ_OWN", "REPORT_READ_OWN",
+    "PROFILE_READ_OWN", "PROFILE_UPDATE_OWN",
+  ],
+  EMPLOYEE: [
+    "LEAVE_APPLY", "LEAVE_READ_OWN", "REPORT_READ_OWN",
+    "PROFILE_READ_OWN", "PROFILE_UPDATE_OWN",
+  ],
+  USER: [
+    "PROFILE_READ_OWN", "PROFILE_UPDATE_OWN",
+  ],
+};
+
 export function normalizeUserRole(userObj) {
   if (!userObj) return userObj;
   const emailLower = userObj.email ? userObj.email.trim().toLowerCase() : "";
@@ -32,8 +56,36 @@ export function normalizeUserRole(userObj) {
   if (emailLower && OFFICIAL_ADMIN_EMAILS.has(emailLower)) {
     return { ...userObj, name: userObj.name || "Admin", role: "ADMIN" };
   }
-  const role = userObj.role ? userObj.role.trim().toUpperCase() : "EMPLOYEE";
+  const rawRole = userObj.role ? userObj.role.trim().toUpperCase().replace(/^ROLE_/, "") : "EMPLOYEE";
+  const role = VALID_ROLES.has(rawRole) ? rawRole : "EMPLOYEE";
   return { ...userObj, name: userObj.name, role };
+}
+
+export function hasPermission(userObj, permission) {
+  if (!userObj) return false;
+  if (Array.isArray(userObj.permissions) && userObj.permissions.length > 0) {
+    return userObj.permissions.includes(permission);
+  }
+  const normalized = normalizeUserRole(userObj);
+  const perms = ROLE_PERMISSIONS[normalized?.role] || [];
+  return perms.includes(permission);
+}
+
+export function getDefaultRouteForRole(userObj) {
+  if (!userObj) return "/login";
+  const role = normalizeUserRole(userObj)?.role;
+  switch (role) {
+    case "ADMIN":
+      return "/admin";
+    case "MANAGER":
+      return "/manager";
+    case "EMPLOYEE":
+      return "/employee";
+    case "USER":
+      return "/profile";
+    default:
+      return "/profile";
+  }
 }
 
 export function validateName(value) {

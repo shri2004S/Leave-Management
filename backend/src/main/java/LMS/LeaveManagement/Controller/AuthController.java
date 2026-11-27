@@ -5,6 +5,7 @@ import LMS.LeaveManagement.dto.AuthResponse;
 import LMS.LeaveManagement.dto.ForgotPasswordRequest;
 import LMS.LeaveManagement.dto.LoginRequest;
 import LMS.LeaveManagement.dto.RegisterRequest;
+import LMS.LeaveManagement.security.RbacConstants;
 import LMS.LeaveManagement.service.AuthService;
 
 import jakarta.validation.Valid;
@@ -71,7 +72,8 @@ public class AuthController {
                 "userId", data.userId(),
                 "name", data.name(),
                 "email", data.email(),
-                "role", data.role()
+                "role", data.role(),
+                "permissions", RbacConstants.getPermissionsForRole(data.role())
         );
     }
 

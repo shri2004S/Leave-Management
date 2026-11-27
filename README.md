@@ -36,11 +36,15 @@ Built a full-stack Employee Leave Management System with React.js, Spring Boot, 
 - **Edit & Cancel:** Ability to modify or cancel pending applications prior to review.
 - **User Profile Modal:** Dedicated modal displaying user details, role, and capabilities.
 
-### Admin Features
+### Admin & RBAC Features
+- **Four-Role Access Control (`ADMIN`, `MANAGER`, `EMPLOYEE`, `USER`):**
+  - **ADMIN:** Full employee & user CRUD (`/api/admin/employees`), role & manager assignment, and leave approvals (`/api/admin/leaves`).
+  - **MANAGER:** View & edit permitted details of assigned employees and manage assigned leave requests (`/api/manager/**`).
+  - **EMPLOYEE:** Apply, edit, cancel personal leaves, and view/export personal leave reports (`/api/leaves/report`).
+  - **USER:** Personal profile access & updates only (`/api/profile`).
 - **Admin Command Center:** Real-time metrics counters for Total, Pending, Approved, and Rejected requests.
-- **Organization-Wide Oversight:** Filter by Status, Approver, and Leave Category with multi-field search.
-- **Approval Actions:** Modal confirmation to approve or reject leave applications.
-- **Dual View Support:** Administrators can toggle between Admin View and Personal Employee View.
+- **Organization-Wide Oversight (Super Admin):** Exclusive All Employees Directory and Admin creation controls.
+- **Dual View Support:** Administrators and Managers can switch cleanly between role portals and Personal Employee Leave View.
 
 ---
 

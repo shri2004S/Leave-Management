@@ -6,6 +6,7 @@ import LMS.LeaveManagement.entity.User;
 import LMS.LeaveManagement.repository.LeaveRequestRepository;
 import LMS.LeaveManagement.repository.UserRepository;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -33,6 +34,7 @@ public class SuperAdminController {
         this(userRepository, passwordEncoder, null);
     }
 
+    @Autowired
     public SuperAdminController(UserRepository userRepository, PasswordEncoder passwordEncoder, LeaveRequestRepository leaveRequestRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;

@@ -1,16 +1,26 @@
 package LMS.LeaveManagement.config;
 
 import LMS.LeaveManagement.entity.LeaveRequest;
+import LMS.LeaveManagement.entity.Permission;
+import LMS.LeaveManagement.entity.Role;
 import LMS.LeaveManagement.entity.User;
 import LMS.LeaveManagement.repository.LeaveRequestRepository;
+import LMS.LeaveManagement.repository.PermissionRepository;
+import LMS.LeaveManagement.repository.RoleRepository;
 import LMS.LeaveManagement.repository.UserRepository;
+import LMS.LeaveManagement.security.RbacConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 @Component
 public class DataInitializer implements CommandLineRunner {
@@ -20,46 +30,117 @@ public class DataInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final LeaveRequestRepository leaveRequestRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RoleRepository roleRepository;
+    private final PermissionRepository permissionRepository;
 
     public DataInitializer(
             UserRepository userRepository,
             LeaveRequestRepository leaveRequestRepository,
             PasswordEncoder passwordEncoder) {
+        this(userRepository, leaveRequestRepository, passwordEncoder, null, null);
+    }
+
+    @Autowired
+    public DataInitializer(
+            UserRepository userRepository,
+            LeaveRequestRepository leaveRequestRepository,
+            PasswordEncoder passwordEncoder,
+            RoleRepository roleRepository,
+            PermissionRepository permissionRepository) {
         this.userRepository = userRepository;
         this.leaveRequestRepository = leaveRequestRepository;
         this.passwordEncoder = passwordEncoder;
+        this.roleRepository = roleRepository;
+        this.permissionRepository = permissionRepository;
     }
 
     @Override
     public void run(String... args) {
         try {
-            log.info("Checking initial application data in database...");
+            log.info("Checking initial RBAC roles, permissions, and application data...");
+
+            Map<String, Role> roleMap = seedRolesAndPermissions();
 
             // 1. Seed Official Reviewer Admins & Super Admin
-            createOrUpdateAdmin("Super Admin", "superadmin@gmail.com", "Password@123");
-            createOrUpdateAdmin("Manideep Sir", "manideep@gmail.com", "Password@123");
-            createOrUpdateAdmin("Sushil Sir", "sushil@gmail.com", "Password@123");
-            createOrUpdateAdmin("Gaurav Sir", "gaurav@gmail.com", "Password@123");
+            createOrUpdateAdmin("Super Admin", "superadmin@gmail.com", "Password@123", roleMap.get("ADMIN"));
+            createOrUpdateAdmin("Manideep Sir", "manideep@gmail.com", "Password@123", roleMap.get("ADMIN"));
+            createOrUpdateAdmin("Sushil Sir", "sushil@gmail.com", "Password@123", roleMap.get("ADMIN"));
+            createOrUpdateAdmin("Gaurav Sir", "gaurav@gmail.com", "Password@123", roleMap.get("ADMIN"));
 
             // 2. Ensure non-admin accounts strictly retain EMPLOYEE role
-            ensureEmployeeRole("shri@gmail.com", "Shri");
-            ensureEmployeeRole("shri1@gmail.com", "Shri");
+            ensureEmployeeRole("shri@gmail.com", "Shri", roleMap.get("EMPLOYEE"));
+            ensureEmployeeRole("shri1@gmail.com", "Shri", roleMap.get("EMPLOYEE"));
 
-            // 3. Seed Default Test Employee (John Doe)
-            User john = createOrGetEmployee("John Doe", "john@settribe.com", "Password@123");
+            // 3. Seed RBAC Demo Accounts for MANAGER, EMPLOYEE, and USER roles
+            User sarahManager = createOrGetAccount(
+                    "Sarah Manager", "manager@settribe.com", "Password@123",
+                    "MANAGER", "Engineering", "Engineering Manager", null, roleMap.get("MANAGER"));
+
+            User john = createOrGetAccount(
+                    "John Doe", "john@settribe.com", "Password@123",
+                    "EMPLOYEE", "Engineering", "Software Engineer", sarahManager, roleMap.get("EMPLOYEE"));
+
+            createOrGetAccount(
+                    "Alex Viewer", "user@settribe.com", "Password@123",
+                    "USER", "General", "Profile Viewer", null, roleMap.get("USER"));
+
+            // Backfill missing Role FK references on existing user rows
+            syncMissingRoleLinks(roleMap);
 
             // 4. Seed Sample Leave Requests for initial testing if empty
             if (leaveRequestRepository.count() == 0 && john != null) {
                 seedSampleLeaveRequests(john);
             }
 
-            log.info("Initial application data check completed successfully.");
+            log.info("Initial RBAC and application data check completed successfully.");
         } catch (Exception ex) {
             log.warn("Notice: DataInitializer ran with notice: {}", ex.getMessage());
         }
     }
 
-    private void createOrUpdateAdmin(String name, String email, String password) {
+    private Map<String, Role> seedRolesAndPermissions() {
+        Map<String, Role> roleMap = new HashMap<>();
+        if (roleRepository == null || permissionRepository == null) {
+            return roleMap;
+        }
+
+        Map<String, Permission> permMap = new HashMap<>();
+        for (Map.Entry<String, String> entry : RbacConstants.PERMISSION_DESCRIPTIONS.entrySet()) {
+            Permission perm = permissionRepository.findByNameIgnoreCase(entry.getKey())
+                    .orElseGet(() -> permissionRepository.save(new Permission(entry.getKey(), entry.getValue())));
+            permMap.put(entry.getKey(), perm);
+        }
+
+        for (String roleName : RbacConstants.VALID_ROLES) {
+            Role role = roleRepository.findByNameIgnoreCase(roleName)
+                    .orElseGet(() -> new Role(roleName, "System " + roleName + " role"));
+            Set<Permission> assignedPerms = new HashSet<>();
+            for (String permName : RbacConstants.getPermissionsForRole(roleName)) {
+                Permission p = permMap.get(permName);
+                if (p != null) {
+                    assignedPerms.add(p);
+                }
+            }
+            role.setPermissions(assignedPerms);
+            roleMap.put(roleName, roleRepository.save(role));
+        }
+
+        return roleMap;
+    }
+
+    private void syncMissingRoleLinks(Map<String, Role> roleMap) {
+        if (roleMap.isEmpty()) return;
+        for (User u : userRepository.findAll()) {
+            String normRole = RbacConstants.normalizeRole(u.getRole());
+            Role expectedRole = roleMap.get(normRole);
+            if (expectedRole != null && (u.getAssignedRole() == null || !expectedRole.getId().equals(u.getAssignedRole().getId()))) {
+                u.setAssignedRole(expectedRole);
+                userRepository.save(u);
+            }
+        }
+    }
+
+    private void createOrUpdateAdmin(String name, String email, String password, Role adminRole) {
         String cleanEmail = email.trim().toLowerCase();
         userRepository.findByEmail(cleanEmail).ifPresentOrElse(
                 user -> {
@@ -70,6 +151,10 @@ public class DataInitializer implements CommandLineRunner {
                     }
                     if (!"ADMIN".equalsIgnoreCase(user.getRole())) {
                         user.setRole("ADMIN");
+                        changed = true;
+                    }
+                    if (adminRole != null && user.getAssignedRole() == null) {
+                        user.setAssignedRole(adminRole);
                         changed = true;
                     }
                     if (!passwordEncoder.matches(password, user.getPassword())
@@ -88,17 +173,24 @@ public class DataInitializer implements CommandLineRunner {
                     admin.setEmail(cleanEmail);
                     admin.setPassword(passwordEncoder.encode(password));
                     admin.setRole("ADMIN");
+                    admin.setAssignedRole(adminRole);
+                    admin.setDepartment("Administration");
+                    admin.setDesignation("Administrator");
                     userRepository.save(admin);
                     log.info("Created Admin account: {}", cleanEmail);
                 });
     }
 
-    private void ensureEmployeeRole(String email, String defaultName) {
+    private void ensureEmployeeRole(String email, String defaultName, Role empRole) {
         String cleanEmail = email.trim().toLowerCase();
         userRepository.findByEmail(cleanEmail).ifPresent(user -> {
             boolean changed = false;
             if (!"EMPLOYEE".equalsIgnoreCase(user.getRole())) {
                 user.setRole("EMPLOYEE");
+                changed = true;
+            }
+            if (empRole != null && user.getAssignedRole() == null) {
+                user.setAssignedRole(empRole);
                 changed = true;
             }
             if (user.getName() != null && user.getName().contains("(Admin)")) {
@@ -115,22 +207,45 @@ public class DataInitializer implements CommandLineRunner {
         });
     }
 
-    private User createOrGetEmployee(String name, String email, String password) {
+    private User createOrGetAccount(
+            String name, String email, String password, String role,
+            String department, String designation, User manager, Role roleEntity) {
         String cleanEmail = email.trim().toLowerCase();
-        return userRepository.findByEmail(cleanEmail).map(user -> {
-            if (!"EMPLOYEE".equalsIgnoreCase(user.getRole())) {
-                user.setRole("EMPLOYEE");
-                return userRepository.save(user);
+        return userRepository.findByEmail(cleanEmail).map(existing -> {
+            boolean changed = false;
+            if (existing.getRole() == null || existing.getRole().isBlank()) {
+                existing.setRole(role);
+                changed = true;
             }
-            return user;
+            if (roleEntity != null && existing.getAssignedRole() == null) {
+                existing.setAssignedRole(roleEntity);
+                changed = true;
+            }
+            if (manager != null && existing.getManager() == null && "EMPLOYEE".equalsIgnoreCase(existing.getRole())) {
+                existing.setManager(manager);
+                changed = true;
+            }
+            if ((existing.getDepartment() == null || existing.getDepartment().isBlank()) && department != null) {
+                existing.setDepartment(department);
+                changed = true;
+            }
+            if ((existing.getDesignation() == null || existing.getDesignation().isBlank()) && designation != null) {
+                existing.setDesignation(designation);
+                changed = true;
+            }
+            return changed ? userRepository.save(existing) : existing;
         }).orElseGet(() -> {
-            User emp = new User();
-            emp.setName(name);
-            emp.setEmail(cleanEmail);
-            emp.setPassword(passwordEncoder.encode(password));
-            emp.setRole("EMPLOYEE");
-            User saved = userRepository.save(emp);
-            log.info("Created test employee account: {}", cleanEmail);
+            User user = new User();
+            user.setName(name);
+            user.setEmail(cleanEmail);
+            user.setPassword(passwordEncoder.encode(password));
+            user.setRole(role);
+            user.setAssignedRole(roleEntity);
+            user.setDepartment(department);
+            user.setDesignation(designation);
+            user.setManager(manager);
+            User saved = userRepository.save(user);
+            log.info("Created default {} account: {}", role, cleanEmail);
             return saved;
         });
     }

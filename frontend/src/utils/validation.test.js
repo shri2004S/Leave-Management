@@ -8,6 +8,8 @@ import {
   validateAuthForm,
   passwordStrength,
   normalizeUserRole,
+  hasPermission,
+  getDefaultRouteForRole,
   getInitials,
 } from "./validationUtils.js";
 
@@ -96,4 +98,29 @@ test("getInitials: returns correct initials and handles Super Admin specially", 
   assert.equal(getInitials("John Doe", "john@example.com"), "JD");
   assert.equal(getInitials("Alice", "alice@example.com"), "AL");
   assert.equal(getInitials("", "employee@example.com"), "EM");
+});
+
+test("RBAC helpers: supports ADMIN, MANAGER, EMPLOYEE, and USER roles & routes", () => {
+  const admin = normalizeUserRole({ email: "a@settribe.com", role: "ADMIN" });
+  const manager = normalizeUserRole({ email: "m@settribe.com", role: "MANAGER" });
+  const employee = normalizeUserRole({ email: "e@settribe.com", role: "EMPLOYEE" });
+  const user = normalizeUserRole({ email: "u@settribe.com", role: "USER" });
+
+  assert.equal(admin.role, "ADMIN");
+  assert.equal(manager.role, "MANAGER");
+  assert.equal(employee.role, "EMPLOYEE");
+  assert.equal(user.role, "USER");
+
+  assert.equal(getDefaultRouteForRole(admin), "/admin");
+  assert.equal(getDefaultRouteForRole(manager), "/manager");
+  assert.equal(getDefaultRouteForRole(employee), "/employee");
+  assert.equal(getDefaultRouteForRole(user), "/profile");
+
+  assert.equal(hasPermission(admin, "EMPLOYEE_DELETE"), true);
+  assert.equal(hasPermission(manager, "EMPLOYEE_DELETE"), false);
+  assert.equal(hasPermission(manager, "LEAVE_MANAGE_ASSIGNED"), true);
+  assert.equal(hasPermission(employee, "LEAVE_APPLY"), true);
+  assert.equal(hasPermission(employee, "LEAVE_MANAGE_ASSIGNED"), false);
+  assert.equal(hasPermission(user, "PROFILE_READ_OWN"), true);
+  assert.equal(hasPermission(user, "LEAVE_APPLY"), false);
 });

@@ -1,24 +1,43 @@
 import React from "react";
 import "./UserProfileModal.css";
 
-function getRoleBadgeLabel(isSuperAdmin, isAdmin) {
+function getRoleBadgeLabel(isSuperAdmin, role) {
   if (isSuperAdmin) return "Super Administrator";
-  if (isAdmin) return "Administrator";
-  return "Employee";
+  switch (role) {
+    case "ADMIN":
+      return "Administrator";
+    case "MANAGER":
+      return "Manager";
+    case "USER":
+      return "User (Profile Only)";
+    default:
+      return "Employee";
+  }
 }
 
-function getSystemRoleDescription(isSuperAdmin, isAdmin) {
+function getSystemRoleDescription(isSuperAdmin, role) {
   if (isSuperAdmin) return "Super Administrator (Highest Privilege)";
-  if (isAdmin) return "System Administrator (ADMIN)";
-  return "Staff Member (EMPLOYEE)";
+  switch (role) {
+    case "ADMIN":
+      return "System Administrator (ADMIN)";
+    case "MANAGER":
+      return "Team Manager (MANAGER)";
+    case "USER":
+      return "Standard User (USER — Profile Only)";
+    default:
+      return "Staff Member (EMPLOYEE)";
+  }
 }
 
 export default function UserProfileModal({ user, onClose, onLogout }) {
   if (!user) return null;
 
+  const role = (user.role || "EMPLOYEE").toUpperCase();
   const isSuperAdmin = user.email?.trim().toLowerCase() === "superadmin@gmail.com";
-  const isAdmin = isSuperAdmin || user.role === "ADMIN";
-  const displayName = isSuperAdmin ? "Super Admin" : (user.name || "Employee");
+  const isAdmin = isSuperAdmin || role === "ADMIN";
+  const isManager = role === "MANAGER";
+  const isUserOnly = role === "USER";
+  const displayName = isSuperAdmin ? "Super Admin" : (user.name || "User");
   const initials = isSuperAdmin ? "SA" : (displayName || user.email || "U")
     .replace(/[()]/g, "")
     .split(/\s+/)
@@ -75,7 +94,7 @@ export default function UserProfileModal({ user, onClose, onLogout }) {
             <div className="profile-hero-name-row">
               <h3 className="profile-name">{displayName}</h3>
               <span className={`profile-role-badge ${isSuperAdmin ? "super" : (user.role || "").toLowerCase()}`}>
-                {getRoleBadgeLabel(isSuperAdmin, isAdmin)}
+                {getRoleBadgeLabel(isSuperAdmin, role)}
               </span>
             </div>
             <p className="profile-email">{user.email}</p>
@@ -129,7 +148,7 @@ export default function UserProfileModal({ user, onClose, onLogout }) {
             <div className="detail-text-wrap">
               <span className="detail-label">System Role</span>
               <span className="detail-value">
-                {getSystemRoleDescription(isSuperAdmin, isAdmin)}
+                {getSystemRoleDescription(isSuperAdmin, role)}
               </span>
             </div>
           </div>
@@ -173,28 +192,54 @@ export default function UserProfileModal({ user, onClose, onLogout }) {
           </div>
           <ul className="permissions-list">
             {isSuperAdmin && (
-              <li>
-                <span className="check-bullet" aria-hidden="true">&#10003;</span>
-                {" "}<strong>Super Admin Privilege:</strong> Provision and manage Administrator accounts using Email ID and Password
-              </li>
+              <>
+                <li>
+                  <span className="check-bullet" aria-hidden="true">&#10003;</span>
+                  {" "}<strong>Super Admin Privilege:</strong> Provision and manage Administrator accounts and view All Employees Directory
+                </li>
+                <li>
+                  <span className="check-bullet" aria-hidden="true">&#10003;</span>
+                  {" "}Review, approve, or reject all employee leave applications organization-wide
+                </li>
+              </>
             )}
             {isAdmin ? (
               <>
                 <li>
                   <span className="check-bullet" aria-hidden="true">&#10003;</span>
-                  {" "}Review, approve, or reject all employee leave applications organization-wide
+                  {" "}Create, view, update, and delete employee/user records and assign roles or managers
+                </li>
+                {!isSuperAdmin && (
+                  <li>
+                    <span className="check-bullet" aria-hidden="true">&#10003;</span>
+                    {" "}Review, approve, or reject employee leave applications assigned to you
+                  </li>
+                )}
+                <li>
+                  <span className="check-bullet" aria-hidden="true">&#10003;</span>
+                  {" "}Access Admin Command Center and switch between Admin, Manager, and Employee views
+                </li>
+              </>
+            ) : isManager ? (
+              <>
+                <li>
+                  <span className="check-bullet" aria-hidden="true">&#10003;</span>
+                  {" "}View assigned employees and edit permitted employee details (department, designation, phone)
                 </li>
                 <li>
                   <span className="check-bullet" aria-hidden="true">&#10003;</span>
-                  {" "}Access Admin Command Center with real-time application counters and statistics
+                  {" "}Approve or reject leave requests assigned to you or your direct reports
                 </li>
                 <li>
                   <span className="check-bullet" aria-hidden="true">&#10003;</span>
-                  {" "}View full employee history, rejection notes, and audit timestamps
+                  {" "}Apply for personal leave and view personal leave reports
                 </li>
+              </>
+            ) : isUserOnly ? (
+              <>
                 <li>
                   <span className="check-bullet" aria-hidden="true">&#10003;</span>
-                  {" "}Switch between Admin View and Personal Employee Leave View anytime
+                  {" "}Access and update your own personal profile information only
                 </li>
               </>
             ) : (
@@ -213,7 +258,7 @@ export default function UserProfileModal({ user, onClose, onLogout }) {
                 </li>
                 <li>
                   <span className="check-bullet" aria-hidden="true">&#10003;</span>
-                  {" "}View personal leave history and official administrative remarks
+                  {" "}View personal leave history and export personal leave reports
                 </li>
               </>
             )}

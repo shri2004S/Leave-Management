@@ -4,12 +4,14 @@ import java.util.List;
 
 import LMS.LeaveManagement.security.JwtAuthenticationFilter;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -21,6 +23,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
+@EnableMethodSecurity
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
@@ -38,6 +41,22 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((request, response, authException) -> {
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.getWriter().write(
+                        "{\"status\":401,\"error\":\"Unauthorized\",\"message\":\"Authentication required or token expired\"}"
+                    );
+                })
+                .accessDeniedHandler((request, response, accessDeniedException) -> {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json");
+                    response.getWriter().write(
+                        "{\"status\":403,\"error\":\"Forbidden\",\"message\":\"Access denied: insufficient role permissions\"}"
+                    );
+                })
+            )
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers(
@@ -51,9 +70,29 @@ public class SecurityConfig {
                     "/*.css",
                     "/favicon.ico"
                 ).permitAll()
+                .requestMatchers(HttpMethod.GET,
+                    "/login",
+                    "/register",
+                    "/forgot-password",
+                    "/admin",
+                    "/admin/employees",
+                    "/super-admin",
+                    "/manager",
+                    "/employee",
+                    "/reports",
+                    "/profile",
+                    "/unauthorized"
+                ).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
                 .requestMatchers("/api/auth/**", "/api/health", "/api/health/**", "/error").permitAll()
+                .requestMatchers("/api/profile/**").authenticated()
                 .requestMatchers("/api/admin/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
+                .requestMatchers("/api/manager/**").hasAnyAuthority("ROLE_MANAGER", "MANAGER", "ROLE_ADMIN", "ADMIN")
+                .requestMatchers("/api/leaves/**").hasAnyAuthority(
+                    "ROLE_EMPLOYEE", "EMPLOYEE",
+                    "ROLE_MANAGER", "MANAGER",
+                    "ROLE_ADMIN", "ADMIN"
+                )
                 .anyRequest().authenticated()
             )
             .addFilterBefore(
@@ -68,7 +107,6 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // Allow any origin pattern (localhost, 127.0.0.1, any port)
         config.setAllowedOriginPatterns(List.of("*"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
@@ -101,14 +139,12 @@ public class SecurityConfig {
                     return false;
                 }
                 String raw = rawPassword.toString();
-                // Check if stored password is BCrypt hash ($2a$, $2b$, $2y$)
                 if (encodedPassword.startsWith("$2a$")
                         || encodedPassword.startsWith("$2b$")
                         || encodedPassword.startsWith("$2y$")) {
                     if (bcrypt.matches(raw, encodedPassword)) {
                         return true;
                     }
-                    // Dual support for default/admin accounts (allow Shri1234@ or Password@123)
                     if ("Shri1234@".equals(raw) && bcrypt.matches("Password@123", encodedPassword)) {
                         return true;
                     }
@@ -117,7 +153,6 @@ public class SecurityConfig {
                     }
                     return false;
                 }
-                // Fallback for plain text passwords manually entered in phpMyAdmin / MySQL
                 return raw.equals(encodedPassword)
                         || ("Shri1234@".equals(raw) && "Password@123".equals(encodedPassword))
                         || ("Password@123".equals(raw) && "Shri1234@".equals(encodedPassword));

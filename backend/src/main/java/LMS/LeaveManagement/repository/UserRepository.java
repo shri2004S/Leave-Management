@@ -1,4 +1,3 @@
-
 package LMS.LeaveManagement.repository;
 
 import LMS.LeaveManagement.entity.User;
@@ -13,4 +12,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmail(String email);
 
     List<User> findByRoleIgnoreCase(String role);
+
+    List<User> findByManagerId(Long managerId);
+
+    List<User> findByManagerEmailIgnoreCase(String managerEmail);
 }

@@ -56,12 +56,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(@org.springframework.lang.NonNull HttpServletRequest request) {
-        String path = request.getServletPath();
+        String servletPath = request.getServletPath();
+        String path = (servletPath != null && !servletPath.isEmpty())
+                ? servletPath
+                : request.getRequestURI();
+        if (path == null) {
+            return false;
+        }
         return path.equals("/api/auth/register")
                 || path.equals("/api/auth/login")
                 || path.equals("/api/auth/forgot-password")
                 || path.equals("/api/auth/logout")
                 || path.equals("/api/health")
+                || path.startsWith("/api/health/")
                 || !path.startsWith("/api/");
     }
 

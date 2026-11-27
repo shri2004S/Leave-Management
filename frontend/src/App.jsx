@@ -1,15 +1,23 @@
 import { useState, useEffect, useMemo } from "react";
+import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import ApplyLeave from "./components/ApplyLeave";
 import MyLeaveRequests from "./components/MyLeaveRequests";
 import AdminLeaveManagement from "./components/AdminLeaveManagement";
+import AdminEmployeeManagement from "./components/AdminEmployeeManagement";
+import ManagerPortal from "./components/ManagerPortal";
+import EmployeeReports from "./components/EmployeeReports";
+import ProfilePage from "./components/ProfilePage";
 import SuperAdminManagement from "./components/SuperAdminManagement";
 import UserProfileModal from "./components/UserProfileModal";
+import ProtectedRoute from "./components/ProtectedRoute";
+import UnauthorizedPage from "./components/UnauthorizedPage";
 import "./App.css";
 
 import {
   EMAIL_REGEX,
   LIMITS,
   normalizeUserRole,
+  getDefaultRouteForRole,
   validateName,
   validateEmail,
   validatePassword,
@@ -47,6 +55,8 @@ function getFormattedToday() {
 }
 
 function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isLogin, setIsLogin] = useState(true);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -56,14 +66,11 @@ function App() {
   const [message, setMessage] = useState({ type: "", text: "" });
   const [loading, setLoading] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [activeTab, setActiveTab] = useState(() => {
-    const saved = loadSavedUser();
-    return saved?.role === "ADMIN" ? "ADMIN" : "EMPLOYEE";
-  });
   const [user, setUser] = useState(loadSavedUser);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
+  const [connectionWarning, setConnectionWarning] = useState("");
   const [adminModalEmail, setAdminModalEmail] = useState("");
   const [adminModalPassword, setAdminModalPassword] = useState("");
   const [adminModalLoading, setAdminModalLoading] = useState(false);
@@ -103,7 +110,7 @@ function App() {
       setTimeout(() => {
         setShowAddAdminModal(false);
         setAdminModalSuccess("");
-        setActiveTab("ADMIN");
+        navigate("/super-admin");
       }, 1500);
     } catch (err) {
       setAdminModalError(err.response?.data?.message || err.message || "Failed to create admin.");
@@ -111,6 +118,29 @@ function App() {
       setAdminModalLoading(false);
     }
   }
+
+  useEffect(() => {
+    function handleAuthExpired() {
+      setUser(null);
+      setIsSidebarOpen(false);
+      setMessage({
+        type: "error",
+        text: "Your session has expired. Please sign in again.",
+      });
+      navigate("/login", { replace: true });
+    }
+    window.addEventListener("auth:expired", handleAuthExpired);
+    return () => window.removeEventListener("auth:expired", handleAuthExpired);
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!user) {
+      const publicPaths = ["/", "/login", "/register", "/forgot-password"];
+      if (!publicPaths.includes(location.pathname)) {
+        navigate("/login", { replace: true });
+      }
+    }
+  }, [user, location.pathname, navigate]);
 
   useEffect(() => {
     async function verifySession() {
@@ -121,14 +151,20 @@ function App() {
 
         localStorage.setItem("leaveUser", JSON.stringify(normalized));
         setUser(normalized);
-
-        setActiveTab(
-          normalized.role === "ADMIN" ? "ADMIN" : "EMPLOYEE"
-        );
-      } catch {
-        localStorage.removeItem("leaveUser");
-        localStorage.removeItem("leaveToken");
-        setUser(null);
+        setConnectionWarning("");
+      } catch (err) {
+        const status = err?.response?.status;
+        if (status === 401 || status === 403 || !localStorage.getItem("leaveUser")) {
+          localStorage.removeItem("leaveUser");
+          localStorage.removeItem("leaveToken");
+          setUser(null);
+        } else {
+          setConnectionWarning(
+            typeof window !== "undefined" && window.location.hostname.includes("onrender.com")
+              ? "Backend service is waking up or temporarily unreachable (connection reset). Please wait a moment and click Retry."
+              : "Cannot reach backend server on port 8080. Ensure the Spring Boot backend is running."
+          );
+        }
       }
     }
 
@@ -347,10 +383,10 @@ function App() {
         onConfirm: () => {
           setPopup({ show: false, title: "", message: "", btnText: "", onConfirm: null });
           setUser(normalizedUser);
-          setActiveTab(normalizedUser.role === "ADMIN" ? "ADMIN" : "EMPLOYEE");
           setForm(EMPTY_FORM);
           setErrors({});
           setTouched({});
+          navigate(getDefaultRouteForRole(normalizedUser), { replace: true });
         },
       });
     } catch (error) {
@@ -382,8 +418,8 @@ function App() {
       setErrors({});
       setTouched({});
       setMessage({ type: "", text: "" });
-      setActiveTab("EMPLOYEE");
       setIsSidebarOpen(false);
+      navigate("/login", { replace: true });
     }
   }
 
@@ -423,10 +459,79 @@ function App() {
   // ---------- DASHBOARD LAYOUT ----------
   if (user) {
     const isSuperAdmin = user?.email?.trim().toLowerCase() === "superadmin@gmail.com";
-    const isAdmin = isSuperAdmin || user.role === "ADMIN";
-    const displayName = isSuperAdmin ? "Super Admin" : (user?.name || "Employee");
-    const displayRole = isSuperAdmin ? "SUPER ADMIN" : user?.role;
+    const userRole = normalizeUserRole(user)?.role || "EMPLOYEE";
+    const isAdmin = isSuperAdmin || userRole === "ADMIN";
+    const isManager = userRole === "MANAGER";
+    const canUseLeaves = isAdmin || isManager || userRole === "EMPLOYEE";
+    const displayName = isSuperAdmin ? "Super Admin" : (user?.name || "User");
+    const displayRole = isSuperAdmin ? "SUPER ADMIN" : userRole;
     const initials = isSuperAdmin ? "SA" : getInitials(displayName, user?.email);
+    const currentPath = location.pathname;
+
+    const handleProfileUpdated = (updatedProfile) => {
+      const normalized = normalizeUserRole({ ...user, ...updatedProfile });
+      localStorage.setItem("leaveUser", JSON.stringify(normalized));
+      setUser(normalized);
+    };
+
+    const getHeaderInfo = () => {
+      if (currentPath === "/super-admin") {
+        return {
+          title: "Super Admin Portal — Add Admin & Directory",
+          subtitle: "Create administrator accounts and inspect all organization employees.",
+          tag: "SUPER ADMIN PORTAL",
+          bannerText: "You have exclusive authority to create administrators and inspect organization directories.",
+        };
+      }
+      if (currentPath === "/admin/employees") {
+        return {
+          title: "Admin — Employee & User Management",
+          subtitle: "Create, update, assign managers/roles, or delete user records.",
+          tag: "ADMIN USER CRUD",
+          bannerText: "Manage employee records, RBAC roles, and reporting manager assignments.",
+        };
+      }
+      if (currentPath === "/admin") {
+        return {
+          title: "Admin Leave Management Portal",
+          subtitle: "Review, approve, or reject leave applications in real time.",
+          tag: "ADMIN PORTAL ACTIVE",
+          bannerText: "Here is your administrative command center for attendance and leave approvals.",
+        };
+      }
+      if (currentPath === "/manager") {
+        return {
+          title: "Manager Team Portal",
+          subtitle: "Manage assigned employees and approve or reject their leave requests.",
+          tag: "MANAGER PORTAL",
+          bannerText: "View your assigned direct reports, edit permitted profile fields, and process team leaves.",
+        };
+      }
+      if (currentPath === "/reports") {
+        return {
+          title: "Personal Leave Reports",
+          subtitle: "Inspect working days taken by category and export your leave history.",
+          tag: "LEAVE REPORTS",
+          bannerText: "Review your approved working days and personal leave statistics.",
+        };
+      }
+      if (currentPath === "/profile") {
+        return {
+          title: "My Profile & Personal Information",
+          subtitle: "View your assigned role, permissions, and update your personal details.",
+          tag: `${displayRole} PROFILE`,
+          bannerText: "Manage your personal account information and view your active role permissions.",
+        };
+      }
+      return {
+        title: "Employee Leave Dashboard",
+        subtitle: "Submit new leave applications, track approval statuses, and manage your records.",
+        tag: "EMPLOYEE PORTAL",
+        bannerText: "You can apply for casual, sick, or earned leaves below and monitor their statuses live.",
+      };
+    };
+
+    const headerInfo = getHeaderInfo();
 
     return (
       <div className="dashboard-app-container">
@@ -471,7 +576,7 @@ function App() {
           />
         )}
 
-        {/* Professional Sidebar Navigation */}
+        {/* Professional Sidebar Navigation (Strictly Role-Scoped) */}
         <aside className={`app-sidebar ${isSidebarOpen ? "sidebar-open" : ""}`}>
           <div className="sidebar-brand">
             <div className="linkedin-brand-logo dashboard-brand-logo">
@@ -483,12 +588,12 @@ function App() {
           <div className="sidebar-nav-section">
             <p className="sidebar-section-title">MAIN NAVIGATION</p>
             <nav className="sidebar-menu">
-              {isAdmin ? (
+              {isAdmin && (
                 <>
                   <button
-                    className={`sidebar-nav-item ${activeTab === "ADMIN" ? "active" : ""}`}
+                    className={`sidebar-nav-item ${currentPath === "/admin" ? "active" : ""}`}
                     onClick={() => {
-                      setActiveTab("ADMIN");
+                      navigate("/admin");
                       setIsSidebarOpen(false);
                     }}
                   >
@@ -497,16 +602,31 @@ function App() {
                       <line x1="8" y1="21" x2="16" y2="21"></line>
                       <line x1="12" y1="17" x2="12" y2="21"></line>
                     </svg>
-                    <span>Admin Portal</span>
+                    <span>Leave Approvals</span>
                     <span className="nav-badge-pill">Admin</span>
                   </button>
 
-                  {/* SUPER ADMIN ONLY: Add Admin User Page */}
+                  <button
+                    className={`sidebar-nav-item ${currentPath === "/admin/employees" ? "active" : ""}`}
+                    onClick={() => {
+                      navigate("/admin/employees");
+                      setIsSidebarOpen(false);
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="9" cy="7" r="4"></circle>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    <span>Employees &amp; Users</span>
+                  </button>
+
                   {isSuperAdmin && (
                     <button
-                      className={`sidebar-nav-item ${activeTab === "ADD_ADMIN" ? "active" : ""}`}
+                      className={`sidebar-nav-item ${currentPath === "/super-admin" ? "active" : ""}`}
                       onClick={() => {
-                        setActiveTab("ADD_ADMIN");
+                        navigate("/super-admin");
                         setIsSidebarOpen(false);
                       }}
                     >
@@ -516,30 +636,38 @@ function App() {
                         <line x1="20" y1="8" x2="20" y2="14"></line>
                         <line x1="23" y1="11" x2="17" y2="11"></line>
                       </svg>
-                      <span>Add Admin User</span>
+                      <span>Super Admin</span>
                       <span className="nav-badge-pill" style={{ background: "#4f46e5", color: "#fff" }}>Super</span>
                     </button>
                   )}
-
-                  <button
-                    className={`sidebar-nav-item ${activeTab === "EMPLOYEE" ? "active" : ""}`}
-                    onClick={() => {
-                      setActiveTab("EMPLOYEE");
-                      setIsSidebarOpen(false);
-                    }}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                      <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
-                    <span>My Leave View</span>
-                  </button>
                 </>
-              ) : (
+              )}
+
+              {(isManager || isAdmin) && (
+                <button
+                  className={`sidebar-nav-item ${currentPath === "/manager" ? "active" : ""}`}
+                  onClick={() => {
+                    navigate("/manager");
+                    setIsSidebarOpen(false);
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                  </svg>
+                  <span>Manager Desk</span>
+                  {isManager && <span className="nav-badge-pill">Manager</span>}
+                </button>
+              )}
+
+              {canUseLeaves && (
                 <>
                   <button
-                    className="sidebar-nav-item active"
-                    onClick={() => setIsSidebarOpen(false)}
+                    className={`sidebar-nav-item ${currentPath === "/employee" ? "active" : ""}`}
+                    onClick={() => {
+                      navigate("/employee");
+                      setIsSidebarOpen(false);
+                    }}
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="3" y="3" width="7" height="7"></rect>
@@ -547,15 +675,45 @@ function App() {
                       <rect x="14" y="14" width="7" height="7"></rect>
                       <rect x="3" y="14" width="7" height="7"></rect>
                     </svg>
-                    <span>Dashboard</span>
+                    <span>{isAdmin || isManager ? "My Leave View" : "Leave Dashboard"}</span>
+                  </button>
+
+                  <button
+                    className={`sidebar-nav-item ${currentPath === "/reports" ? "active" : ""}`}
+                    onClick={() => {
+                      navigate("/reports");
+                      setIsSidebarOpen(false);
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="20" x2="18" y2="10"></line>
+                      <line x1="12" y1="20" x2="12" y2="4"></line>
+                      <line x1="6" y1="20" x2="6" y2="14"></line>
+                    </svg>
+                    <span>Leave Reports</span>
                   </button>
                 </>
               )}
+
+              <button
+                className={`sidebar-nav-item ${currentPath === "/profile" ? "active" : ""}`}
+                onClick={() => {
+                  navigate("/profile");
+                  setIsSidebarOpen(false);
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <span>My Profile</span>
+                {userRole === "USER" && <span className="nav-badge-pill">User</span>}
+              </button>
             </nav>
           </div>
 
           {/* SUPER ADMIN EXCLUSIVE SIDEBAR SECTION */}
-          {user?.email?.trim().toLowerCase() === "superadmin@gmail.com" && (
+          {isSuperAdmin && (
             <div className="sidebar-nav-section" style={{ borderTop: "1px solid #e2e8f0", paddingTop: "14px", marginTop: "14px" }}>
               <p className="sidebar-section-title" style={{ color: "#4338ca", fontWeight: "700", display: "flex", alignItems: "center", gap: "6px" }}>
                 <span>SUPER ADMIN</span>
@@ -583,57 +741,42 @@ function App() {
             </div>
           )}
 
-          <div className="sidebar-nav-section quick-jump-section">
-            <p className="sidebar-section-title">QUICK ACCESS</p>
-            <nav className="sidebar-menu">
-              <a
-                href="#apply-leave-section"
-                className="sidebar-nav-item"
-                onClick={() => {
-                  if (activeTab !== "EMPLOYEE") setActiveTab("EMPLOYEE");
-                  setIsSidebarOpen(false);
-                }}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 20h9"></path>
-                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                </svg>
-                <span>Apply for Leave</span>
-              </a>
+          {canUseLeaves && (
+            <div className="sidebar-nav-section quick-jump-section">
+              <p className="sidebar-section-title">QUICK ACCESS</p>
+              <nav className="sidebar-menu">
+                <button
+                  className="sidebar-nav-item"
+                  onClick={() => {
+                    navigate("/employee");
+                    setIsSidebarOpen(false);
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 20h9"></path>
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                  </svg>
+                  <span>Apply for Leave</span>
+                </button>
 
-              <a
-                href="#my-requests-section"
-                className="sidebar-nav-item"
-                onClick={() => {
-                  if (activeTab !== "EMPLOYEE") setActiveTab("EMPLOYEE");
-                  setIsSidebarOpen(false);
-                }}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                  <line x1="16" y1="13" x2="8" y2="13"></line>
-                  <line x1="16" y1="17" x2="8" y2="17"></line>
-                  <polyline points="10 9 9 9 8 9"></polyline>
-                </svg>
-                <span>My Requests History</span>
-              </a>
-
-              <button
-                className={`sidebar-nav-item ${showProfileModal ? "active" : ""}`}
-                onClick={() => {
-                  setShowProfileModal(true);
-                  setIsSidebarOpen(false);
-                }}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-                <span>My Profile</span>
-              </button>
-            </nav>
-          </div>
+                <button
+                  className="sidebar-nav-item"
+                  onClick={() => {
+                    navigate("/reports");
+                    setIsSidebarOpen(false);
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                  </svg>
+                  <span>Leave Summary Report</span>
+                </button>
+              </nav>
+            </div>
+          )}
 
           {/* User Profile Card at bottom of sidebar */}
           <div className="sidebar-user-footer">
@@ -655,7 +798,7 @@ function App() {
                 <p className="user-name-label">{displayName}</p>
                 <p className="user-email-label">{user.email}</p>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                  <span className={`role-pill ${isSuperAdmin ? "super-admin" : user.role.toLowerCase()}`}>
+                  <span className={`role-pill ${isSuperAdmin ? "super-admin" : userRole.toLowerCase()}`}>
                     {displayRole}
                   </span>
                   <span className="profile-card-action-hint">View Profile &rarr;</span>
@@ -679,20 +822,8 @@ function App() {
           {/* Topbar Banner */}
           <header className="main-topbar">
             <div className="topbar-left">
-              <h1 className="topbar-title">
-                {isSuperAdmin && activeTab === "ADD_ADMIN"
-                  ? "Super Admin Portal — Add Admin User"
-                  : isAdmin && activeTab === "ADMIN"
-                  ? "Admin Management Portal"
-                  : "Employee Leave Dashboard"}
-              </h1>
-              <p className="topbar-subtitle">
-                {isSuperAdmin && activeTab === "ADD_ADMIN"
-                  ? "Create and manage system administrator accounts using email and password."
-                  : isAdmin && activeTab === "ADMIN"
-                  ? "Review, approve, or reject organization leave applications in real time."
-                  : "Submit new leave applications, track approval statuses, and manage your records."}
-              </p>
+              <h1 className="topbar-title">{headerInfo.title}</h1>
+              <p className="topbar-subtitle">{headerInfo.subtitle}</p>
             </div>
 
             <div className="topbar-right">
@@ -706,44 +837,35 @@ function App() {
                 <span>{todayFormatted}</span>
               </div>
 
-              {isAdmin && (
+              {(isAdmin || isManager) && (
                 <div className="portal-switch-pill">
-                  <button
-                    className={`switch-tab-btn ${activeTab === "ADMIN" ? "active" : ""}`}
-                    onClick={() => setActiveTab("ADMIN")}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                      <line x1="8" y1="21" x2="16" y2="21"></line>
-                      <line x1="12" y1="17" x2="12" y2="21"></line>
-                    </svg>
-                    <span>Admin View</span>
-                  </button>
-
-                  {isSuperAdmin && (
-                    <button
-                      className={`switch-tab-btn ${activeTab === "ADD_ADMIN" ? "active" : ""}`}
-                      onClick={() => setActiveTab("ADD_ADMIN")}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="8.5" cy="7" r="4"></circle>
-                        <line x1="20" y1="8" x2="20" y2="14"></line>
-                        <line x1="23" y1="11" x2="17" y2="11"></line>
-                      </svg>
-                      <span>Add Admin User</span>
-                    </button>
+                  {isAdmin && (
+                    <>
+                      <button
+                        className={`switch-tab-btn ${currentPath === "/admin" ? "active" : ""}`}
+                        onClick={() => navigate("/admin")}
+                      >
+                        <span>Leaves</span>
+                      </button>
+                      <button
+                        className={`switch-tab-btn ${currentPath === "/admin/employees" ? "active" : ""}`}
+                        onClick={() => navigate("/admin/employees")}
+                      >
+                        <span>Employees</span>
+                      </button>
+                    </>
                   )}
-
                   <button
-                    className={`switch-tab-btn ${activeTab === "EMPLOYEE" ? "active" : ""}`}
-                    onClick={() => setActiveTab("EMPLOYEE")}
+                    className={`switch-tab-btn ${currentPath === "/manager" ? "active" : ""}`}
+                    onClick={() => navigate("/manager")}
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                      <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
-                    <span>Employee View</span>
+                    <span>Manager Desk</span>
+                  </button>
+                  <button
+                    className={`switch-tab-btn ${currentPath === "/employee" ? "active" : ""}`}
+                    onClick={() => navigate("/employee")}
+                  >
+                    <span>My Leaves</span>
                   </button>
                 </div>
               )}
@@ -756,7 +878,7 @@ function App() {
                 <div className="topbar-avatar-badge">{initials}</div>
                 <div className="topbar-profile-info">
                   <span className="topbar-profile-name">{displayName}</span>
-                  <span className={`topbar-role-tag ${isSuperAdmin ? "super-admin" : user.role?.toLowerCase()}`}>
+                  <span className={`topbar-role-tag ${isSuperAdmin ? "super-admin" : userRole.toLowerCase()}`}>
                     {displayRole} Profile &rarr;
                   </span>
                 </div>
@@ -767,21 +889,9 @@ function App() {
           {/* Welcome Greeting Banner */}
           <section className="welcome-banner-card">
             <div className="welcome-banner-content">
-              <span className="welcome-tag-pill">
-                {isSuperAdmin && activeTab === "ADD_ADMIN"
-                  ? "SUPER ADMIN PORTAL"
-                  : isAdmin && activeTab === "ADMIN"
-                  ? "ADMIN PORTAL ACTIVE"
-                  : "PORTAL ACTIVE"}
-              </span>
+              <span className="welcome-tag-pill">{headerInfo.tag}</span>
               <h2>Welcome back, {displayName}!</h2>
-              <p>
-                {isSuperAdmin && activeTab === "ADD_ADMIN"
-                  ? "You have exclusive authority to create and manage system administrator accounts using email and password."
-                  : isAdmin && activeTab === "ADMIN"
-                  ? "Here is your administrative command center for organizational attendance and approvals."
-                  : "You can apply for casual, sick, or earned leaves below and monitor their statuses live."}
-              </p>
+              <p>{headerInfo.bannerText}</p>
             </div>
             <div className="welcome-banner-icon" aria-hidden="true">
               <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -792,22 +902,113 @@ function App() {
             </div>
           </section>
 
-          {/* Tab Content */}
+          {/* Connection Warning Banner */}
+          {connectionWarning && (
+            <div
+              role="alert"
+              style={{
+                margin: "0 0 18px 0",
+                padding: "12px 16px",
+                background: "#fffbeb",
+                border: "1px solid #fde68a",
+                borderRadius: "10px",
+                color: "#92400e",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+                fontSize: "0.9rem",
+              }}
+            >
+              <span>⚠ {connectionWarning}</span>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "8px",
+                  border: "1px solid #f59e0b",
+                  background: "#ffffff",
+                  color: "#b45309",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Retry Connection
+              </button>
+            </div>
+          )}
+
+          {/* Role-Protected Route Content */}
           <main className="dashboard-content-area">
-            {isSuperAdmin && activeTab === "ADD_ADMIN" ? (
-              <SuperAdminManagement user={user} />
-            ) : isAdmin && activeTab === "ADMIN" ? (
-              <AdminLeaveManagement />
-            ) : (
-              <>
-                <div id="apply-leave-section">
-                  <ApplyLeave onLeaveSubmitted={handleLeaveSubmitted} />
-                </div>
-                <div id="my-requests-section">
-                  <MyLeaveRequests refreshTrigger={refreshTrigger} />
-                </div>
-              </>
-            )}
+            <Routes>
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute user={user} allowedRoles={["ADMIN"]}>
+                    <AdminLeaveManagement />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/employees"
+                element={
+                  <ProtectedRoute user={user} allowedRoles={["ADMIN"]}>
+                    <AdminEmployeeManagement currentUser={user} />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/super-admin"
+                element={
+                  <ProtectedRoute user={user} allowedRoles={["ADMIN"]} requireSuperAdmin={true}>
+                    <SuperAdminManagement user={user} />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/manager"
+                element={
+                  <ProtectedRoute user={user} allowedRoles={["MANAGER", "ADMIN"]}>
+                    <ManagerPortal currentUser={user} />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/employee"
+                element={
+                  <ProtectedRoute user={user} allowedRoles={["EMPLOYEE", "MANAGER", "ADMIN"]}>
+                    <>
+                      <div id="apply-leave-section">
+                        <ApplyLeave onLeaveSubmitted={handleLeaveSubmitted} />
+                      </div>
+                      <div id="my-requests-section">
+                        <MyLeaveRequests refreshTrigger={refreshTrigger} />
+                      </div>
+                    </>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/reports"
+                element={
+                  <ProtectedRoute user={user} allowedRoles={["EMPLOYEE", "MANAGER", "ADMIN"]}>
+                    <EmployeeReports />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute user={user} allowedRoles={["USER", "EMPLOYEE", "MANAGER", "ADMIN"]}>
+                    <ProfilePage user={user} onProfileUpdated={handleProfileUpdated} />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/unauthorized" element={<UnauthorizedPage user={user} />} />
+              <Route path="*" element={<Navigate to={getDefaultRouteForRole(user)} replace />} />
+            </Routes>
           </main>
         </div>
 

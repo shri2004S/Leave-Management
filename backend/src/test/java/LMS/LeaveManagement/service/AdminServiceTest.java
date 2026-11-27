@@ -148,6 +148,25 @@ public class AdminServiceTest {
     }
 
     @Test
+    @DisplayName("Should block regular admin from updating leave assigned to another admin")
+    void testPreventCrossAdminApproval() {
+        LeaveRequest req = new LeaveRequest();
+        req.setId(30L);
+        req.setStatus("PENDING");
+        req.setAssignedAdmin("Sushil Sir (sushil@gmail.com)");
+
+        when(leaveRepository.findById(30L)).thenReturn(Optional.of(req));
+
+        Authentication auth = mock(Authentication.class);
+        when(auth.getName()).thenReturn("manideep@gmail.com");
+
+        assertThatThrownBy(() -> adminService.updateLeaveStatus(30L, "APPROVED", auth))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("assigned to another admin");
+        verify(leaveRepository, never()).save(any(LeaveRequest.class));
+    }
+
+    @Test
     @DisplayName("Should reject a pending leave request")
     void testRejectLeave() {
         LeaveRequest req = new LeaveRequest();

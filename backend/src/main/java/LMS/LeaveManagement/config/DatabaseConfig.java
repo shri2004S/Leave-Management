@@ -131,13 +131,15 @@ public class DatabaseConfig {
             }
         }
 
+        String driverClass = detectDriverClass(jdbcUrl);
         config.setJdbcUrl(jdbcUrl);
-        config.setDriverClassName("org.postgresql.Driver");
+        config.setDriverClassName(driverClass);
         config.setUsername(username);
         config.setPassword(password);
 
-        // Bounded pool settings for Neon cloud database
-        config.setPoolName("NeonHikariPool");
+        // Bounded pool settings
+        config.setPoolName(driverClass.contains("mysql") ? "MySqlHikariPool"
+                : driverClass.contains("h2") ? "H2HikariPool" : "NeonHikariPool");
         config.setMaximumPoolSize(5);
         config.setMinimumIdle(2);
         config.setConnectionTimeout(20000);   // 20s
@@ -148,9 +150,22 @@ public class DatabaseConfig {
         config.setConnectionTestQuery("SELECT 1");
 
         // Log masked URL for security
-        log.info("Initialized Neon HikariCP DataSource: {}", maskUrl(jdbcUrl));
+        log.info("Initialized HikariCP DataSource ({}): {}", driverClass, maskUrl(jdbcUrl));
 
         return new HikariDataSource(config);
+    }
+
+    private static String detectDriverClass(String jdbcUrl) {
+        if (jdbcUrl != null) {
+            String lower = jdbcUrl.toLowerCase();
+            if (lower.startsWith("jdbc:mysql:")) {
+                return "com.mysql.cj.jdbc.Driver";
+            }
+            if (lower.startsWith("jdbc:h2:")) {
+                return "org.h2.Driver";
+            }
+        }
+        return "org.postgresql.Driver";
     }
 
     private String resolveJdbcUrl(String rawJdbcUrl) {

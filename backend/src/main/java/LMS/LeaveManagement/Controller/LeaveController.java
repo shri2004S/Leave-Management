@@ -8,11 +8,13 @@ import LMS.LeaveManagement.service.LeaveService;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/leaves")
+@PreAuthorize("hasAnyRole('EMPLOYEE', 'MANAGER', 'ADMIN')")
 public class LeaveController {
 
     private final LeaveService leaveService;
@@ -27,8 +29,13 @@ public class LeaveController {
     }
 
     @GetMapping("/recipients")
-    public ResponseEntity<List<Map<String, Object>>> getAllUsers() {
-        return ResponseEntity.ok(leaveService.getAllUsers());
+    public ResponseEntity<List<Map<String, Object>>> getAllUsers(Authentication authentication) {
+        String email = authentication != null && authentication.getName() != null
+                ? authentication.getName().trim().toLowerCase() : "";
+        if ("superadmin@gmail.com".equalsIgnoreCase(email)) {
+            return ResponseEntity.ok(leaveService.getAllUsers());
+        }
+        return ResponseEntity.ok(leaveService.getAvailableAdmins());
     }
 
     @PostMapping({"", "/applyLeaves"})
@@ -76,6 +83,12 @@ public class LeaveController {
             .collect(Collectors.toList());
 
         return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/report")
+    @PreAuthorize("hasAuthority('REPORT_READ_OWN')")
+    public ResponseEntity<Map<String, Object>> getMyLeaveReport(Authentication authentication) {
+        return ResponseEntity.ok(leaveService.getMyLeaveReport(authentication));
     }
 
     @PutMapping("/{id}")

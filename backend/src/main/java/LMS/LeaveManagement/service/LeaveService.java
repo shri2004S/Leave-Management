@@ -5,8 +5,12 @@ import LMS.LeaveManagement.entity.User;
 import LMS.LeaveManagement.repository.LeaveRequestRepository;
 import LMS.LeaveManagement.repository.UserRepository;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -160,17 +164,19 @@ public class LeaveService {
         return leaveRepository.save(existing);
     }
 
+    @Transactional(readOnly = true)
     public List<java.util.Map<String, Object>> getAvailableAdmins() {
-        ensureOfficialAdminRecord("Manideep Sir", "manideep@gmail.com");
-        ensureOfficialAdminRecord("Sushil Sir", "sushil@gmail.com");
-        ensureOfficialAdminRecord("Gaurav Sir", "gaurav@gmail.com");
-
         java.util.Set<String> legacy = java.util.Set.of(
             "manideepsir@gmail.com", "sushilsir@gmail.com", "gauravsir@gmail.com",
             "admin@settribe.com", "admin@gmail.com", "newadmin@gmail.com",
             "shri@gmail.com", "shri1@gmail.com", "superadmin@gmail.com"
         );
-        return userRepository.findByRoleIgnoreCase("ADMIN").stream()
+        List<User> approvers = new java.util.ArrayList<>(userRepository.findByRoleIgnoreCase("ADMIN"));
+        List<User> managers = userRepository.findByRoleIgnoreCase("MANAGER");
+        if (managers != null && !managers.isEmpty()) {
+            approvers.addAll(managers);
+        }
+        return approvers.stream()
             .filter(u -> u.getEmail() != null && !legacy.contains(u.getEmail().toLowerCase()))
             .map(u -> {
                 java.util.Map<String, Object> map = new java.util.HashMap<>();
@@ -180,32 +186,90 @@ public class LeaveService {
                 map.put("role", u.getRole());
                 return map;
             })
-            .collect(java.util.stream.Collectors.toList());
+            .collect(Collectors.toList());
     }
 
-    private void ensureOfficialAdminRecord(String name, String email) {
-        try {
-            userRepository.findByEmail(email).ifPresentOrElse(
-                u -> {
-                    if (!"ADMIN".equalsIgnoreCase(u.getRole())) {
-                        u.setRole("ADMIN");
-                        u.setName(name);
-                        userRepository.save(u);
-                    }
-                },
-                () -> {
-                    User nu = new User();
-                    nu.setName(name);
-                    nu.setEmail(email);
-                    nu.setRole("ADMIN");
-                    nu.setPassword("$2a$10$baN/1DaM95ALzvOHcy6FPeXLvk.sZXXHwciSnSNAaeOfi666iaGI6");
-                    userRepository.save(nu);
+    @Transactional(readOnly = true)
+    public Map<String, Object> getMyLeaveReport(Authentication authentication) {
+        String email = authentication.getName();
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.UNAUTHORIZED, "User not found"));
+
+        List<LeaveRequest> leaves = leaveRepository.findByUserId(user.getId());
+        long total = leaves.size();
+        long pending = leaves.stream().filter(l -> "PENDING".equalsIgnoreCase(l.getStatus())).count();
+        long approved = leaves.stream().filter(l -> "APPROVED".equalsIgnoreCase(l.getStatus())).count();
+        long rejected = leaves.stream().filter(l -> "REJECTED".equalsIgnoreCase(l.getStatus())).count();
+
+        Map<String, Long> workingDaysByCategory = new LinkedHashMap<>();
+        workingDaysByCategory.put("CASUAL", 0L);
+        workingDaysByCategory.put("SICK", 0L);
+        workingDaysByCategory.put("EARNED", 0L);
+        workingDaysByCategory.put("OTHER", 0L);
+
+        long totalApprovedWorkingDays = 0;
+        for (LeaveRequest l : leaves) {
+            if ("APPROVED".equalsIgnoreCase(l.getStatus())) {
+                long days = countWorkingDays(l.getFromDate(), l.getToDate());
+                totalApprovedWorkingDays += days;
+                String cat = l.getLeaveType() != null ? l.getLeaveType().trim().toUpperCase() : "OTHER";
+                if (!workingDaysByCategory.containsKey(cat)) {
+                    cat = "OTHER";
                 }
-            );
-        } catch (Exception ignored) {
+                workingDaysByCategory.put(cat, workingDaysByCategory.get(cat) + days);
+            }
         }
+
+        List<Map<String, Object>> history = leaves.stream()
+            .sorted((a, b) -> b.getId().compareTo(a.getId()))
+            .map(l -> {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", l.getId());
+                item.put("leaveType", l.getLeaveType());
+                item.put("fromDate", l.getFromDate());
+                item.put("toDate", l.getToDate());
+                item.put("workingDays", countWorkingDays(l.getFromDate(), l.getToDate()));
+                item.put("reason", l.getReason());
+                item.put("status", l.getStatus());
+                item.put("assignedAdmin", l.getAssignedAdmin() != null ? l.getAssignedAdmin() : "");
+                item.put("rejectionReason", l.getRejectionReason() != null ? l.getRejectionReason() : "");
+                return item;
+            })
+            .collect(Collectors.toList());
+
+        Map<String, Object> report = new LinkedHashMap<>();
+        report.put("employeeName", user.getName());
+        report.put("employeeEmail", user.getEmail());
+        report.put("department", user.getDepartment() != null ? user.getDepartment() : "");
+        report.put("designation", user.getDesignation() != null ? user.getDesignation() : "");
+        report.put("totalRequests", total);
+        report.put("pendingRequests", pending);
+        report.put("approvedRequests", approved);
+        report.put("rejectedRequests", rejected);
+        report.put("totalApprovedWorkingDays", totalApprovedWorkingDays);
+        report.put("workingDaysByCategory", workingDaysByCategory);
+        report.put("history", history);
+        return report;
     }
 
+    private long countWorkingDays(LocalDate from, LocalDate to) {
+        if (from == null || to == null || to.isBefore(from)) {
+            return 0L;
+        }
+        long working = 0L;
+        LocalDate cursor = from;
+        while (!cursor.isAfter(to)) {
+            DayOfWeek dow = cursor.getDayOfWeek();
+            if (dow != DayOfWeek.SATURDAY && dow != DayOfWeek.SUNDAY) {
+                working++;
+            }
+            cursor = cursor.plusDays(1);
+        }
+        return working;
+    }
+
+    @Transactional(readOnly = true)
     public List<java.util.Map<String, Object>> getAllUsers() {
         return userRepository.findAll().stream()
             .map(u -> {

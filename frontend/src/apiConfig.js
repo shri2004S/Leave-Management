@@ -35,10 +35,14 @@ export const AUTH_API_URL = `${API_BASE}/api/auth`;
 export const LEAVES_API_URL = `${API_BASE}/api/leaves`;
 export const ADMIN_API_URL = `${API_BASE}/api/admin/leaves`;
 export const ADMIN_USERS_API_URL = `${API_BASE}/api/admin/users`;
+export const ADMIN_EMPLOYEES_API_URL = `${API_BASE}/api/admin/employees`;
+export const MANAGER_API_URL = `${API_BASE}/api/manager`;
+export const PROFILE_API_URL = `${API_BASE}/api/profile`;
 
 // Create standardized Axios instance
 export const api = axios.create({
   baseURL: API_BASE,
+  timeout: 30000,
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",
@@ -56,6 +60,41 @@ api.interceptors.request.use(
     return config;
   },
   (error) => Promise.reject(error)
+);
+
+// Retry idempotent GET requests once on transient connection resets / cold starts
+// and emit auth:expired when protected endpoints return HTTP 401
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const config = error?.config;
+    const status = error?.response?.status;
+    const url = config?.url || "";
+    const isAuthAttempt =
+      url.includes("/api/auth/login") ||
+      url.includes("/api/auth/register") ||
+      url.includes("/api/auth/forgot-password");
+
+    if (status === 401 && !isAuthAttempt && typeof window !== "undefined") {
+      localStorage.removeItem("leaveToken");
+      localStorage.removeItem("leaveUser");
+      window.dispatchEvent(new CustomEvent("auth:expired"));
+      return Promise.reject(error);
+    }
+
+    const isTransientGet =
+      config &&
+      config.method?.toLowerCase() === "get" &&
+      !config._retried &&
+      (!error.response || error.code === "ERR_NETWORK" || error.code === "ECONNABORTED");
+
+    if (isTransientGet) {
+      config._retried = true;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      return api(config);
+    }
+    return Promise.reject(error);
+  }
 );
 
 export { axios };

@@ -1,16 +1,19 @@
 package LMS.LeaveManagement.service;
 
+import LMS.LeaveManagement.entity.Permission;
+import LMS.LeaveManagement.entity.User;
+import LMS.LeaveManagement.repository.UserRepository;
+import LMS.LeaveManagement.security.RbacConstants;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import LMS.LeaveManagement.entity.User;
-import LMS.LeaveManagement.repository.UserRepository;
-
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
@@ -42,7 +45,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .or(() -> userRepository.findByEmail(email))
                 .orElse(null);
 
-        // Auto-provision official admin if missing in Neon database
+        // Auto-provision official admin if missing in database
         if (user == null && isOfficialAdmin(cleanEmail)) {
             user = new User();
             user.setEmail(cleanEmail);
@@ -74,16 +77,26 @@ public class CustomUserDetailsService implements UserDetailsService {
 
         String rawRole = adminUser ? "ADMIN"
                 : (user.getRole() != null ? user.getRole().trim().toUpperCase() : "EMPLOYEE");
-        String cleanRole = rawRole.startsWith("ROLE_") ? rawRole.substring(5) : rawRole;
+        String cleanRole = RbacConstants.normalizeRole(rawRole);
 
-        List<SimpleGrantedAuthority> authorities = new ArrayList<>();
-        authorities.add(new SimpleGrantedAuthority("ROLE_" + cleanRole));
-        authorities.add(new SimpleGrantedAuthority(cleanRole));
+        Set<SimpleGrantedAuthority> authoritySet = new LinkedHashSet<>();
+        authoritySet.add(new SimpleGrantedAuthority("ROLE_" + cleanRole));
+        authoritySet.add(new SimpleGrantedAuthority(cleanRole));
 
-        if (adminUser) {
-            authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
-            authorities.add(new SimpleGrantedAuthority("ADMIN"));
+        if (user.getAssignedRole() != null && user.getAssignedRole().getPermissions() != null
+                && !user.getAssignedRole().getPermissions().isEmpty()) {
+            for (Permission permission : user.getAssignedRole().getPermissions()) {
+                if (permission != null && permission.getName() != null && !permission.getName().isBlank()) {
+                    authoritySet.add(new SimpleGrantedAuthority(permission.getName().trim().toUpperCase()));
+                }
+            }
+        } else {
+            for (String perm : RbacConstants.getPermissionsForRole(cleanRole)) {
+                authoritySet.add(new SimpleGrantedAuthority(perm));
+            }
         }
+
+        List<SimpleGrantedAuthority> authorities = new ArrayList<>(authoritySet);
 
         return org.springframework.security.core.userdetails.User
                 .withUsername(user.getEmail())

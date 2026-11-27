@@ -98,6 +98,22 @@ public class SecurityAndRbacTest {
                 .isInstanceOf(Exception.class);
     }
 
+    @Test
+    @DisplayName("SEC-02B: Non-Base64 or short JWT secret should cleanly derive a valid 256-bit HMAC key")
+    void testJwtServiceHandlesPlainRenderGeneratedSecret() {
+        JwtService plainJwtService = new JwtService("render-generated-plain-secret_123", 3600000);
+        UserDetails userDetails = org.springframework.security.core.userdetails.User
+                .withUsername("employee@settribe.com")
+                .password("encoded")
+                .roles("EMPLOYEE")
+                .build();
+
+        String token = plainJwtService.generateToken(userDetails);
+        assertThat(token).isNotEmpty();
+        assertThat(plainJwtService.extractUsername(token)).isEqualTo("employee@settribe.com");
+        assertThat(plainJwtService.isTokenValid(token, userDetails)).isTrue();
+    }
+
     // ----------------------------------------------------
     // 2. ROLE-BASED ACCESS CONTROL (RBAC) ISOLATION
     // ----------------------------------------------------
@@ -129,7 +145,7 @@ public class SecurityAndRbacTest {
     void testAdminRejectInvalidStatus() {
         Map<String, String> payload = Map.of("status", "HACKED_STATUS");
 
-        assertThatThrownBy(() -> adminLeaveController.updateLeaveStatus(1L, payload))
+        assertThatThrownBy(() -> adminLeaveController.updateLeaveStatus(1L, payload, authentication))
                 .isInstanceOf(ResponseStatusException.class)
                 .matches(e -> ((ResponseStatusException) e).getStatusCode() == HttpStatus.BAD_REQUEST)
                 .hasMessageContaining("Status must be either APPROVED or REJECTED");
@@ -138,6 +154,8 @@ public class SecurityAndRbacTest {
     @Test
     @DisplayName("SEC-06: Admin user status update accepts valid APPROVED and REJECTED statuses")
     void testAdminAcceptsValidStatuses() {
+        when(authentication.getName()).thenReturn("superadmin@gmail.com");
+
         LeaveRequest req = new LeaveRequest();
         req.setId(10L);
         req.setStatus("PENDING");
@@ -146,13 +164,13 @@ public class SecurityAndRbacTest {
         when(leaveRepository.save(any(LeaveRequest.class))).thenReturn(req);
 
         ResponseEntity<Map<String, Object>> resApproved =
-                adminLeaveController.updateLeaveStatus(10L, Map.of("status", "APPROVED"));
+                adminLeaveController.updateLeaveStatus(10L, Map.of("status", "APPROVED"), authentication);
         assertThat(resApproved.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(resApproved.getBody()).isNotNull();
         assertThat(resApproved.getBody().get("status")).isEqualTo("APPROVED");
 
         ResponseEntity<Map<String, Object>> resRejected =
-                adminLeaveController.updateLeaveStatus(10L, Map.of("status", "REJECTED"));
+                adminLeaveController.updateLeaveStatus(10L, Map.of("status", "REJECTED"), authentication);
         assertThat(resRejected.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(resRejected.getBody()).isNotNull();
         assertThat(resRejected.getBody().get("status")).isEqualTo("REJECTED");

@@ -37,7 +37,11 @@ function ApplyLeave({ onLeaveSubmitted }) {
           setAdmins(response.data);
         }
       } catch (err) {
-        console.error("Failed to load admins:", err);
+        if (err?.response?.status === 401 || err?.response?.status === 403) {
+          console.warn("Session not authorized to sync approvers list; using defaults.");
+        } else {
+          console.warn("Using default approver list (backend unreachable):", err?.message || err);
+        }
       }
     }
 
@@ -60,7 +64,7 @@ function ApplyLeave({ onLeaveSubmitted }) {
       map.set(adm.email.toLowerCase(), { ...adm });
     });
 
-    // If backend returned admins, overlay matching ones (excluding legacy)
+    // If backend returned admins/managers, overlay matching ones or include active managers
     if (Array.isArray(admins)) {
       admins.forEach((adm) => {
         if (!adm || !adm.email) return;
@@ -68,6 +72,12 @@ function ApplyLeave({ onLeaveSubmitted }) {
         if (legacyEmails.has(emailLower)) return;
         if (map.has(emailLower)) {
           map.set(emailLower, { ...map.get(emailLower), ...adm });
+        } else if (String(adm.role || "").toUpperCase() === "MANAGER") {
+          map.set(emailLower, {
+            ...adm,
+            initial: adm.name ? adm.name.charAt(0).toUpperCase() : "M",
+            avatarClass: "avatar-m",
+          });
         }
       });
     }
